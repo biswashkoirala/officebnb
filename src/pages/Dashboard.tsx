@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarCheck, Plus, Star, TrendingUp, Wallet } from 'lucide-react';
 import StatsCard from '../components/StatsCard';
@@ -7,6 +7,8 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatTime } from '../lib/utils';
+import { fetchBookingsForListingIds, fetchListingsByBusinessName } from '../lib/api';
+import type { Booking, Listing } from '../types';
 
 const REVENUE_DATA = [
   { day: 'Monday', value: 80 },
@@ -18,23 +20,39 @@ const REVENUE_DATA = [
   { day: 'Sunday', value: 195 },
 ];
 
-const OWNER_SPACES = [
-  { id: 'modern-meeting-room-cbd', name: 'Modern Meeting Room', price: 25, bookings: 18, rating: 4.9 },
-  { id: 'skyline-boardroom-chatswood', name: 'Executive Boardroom', price: 45, bookings: 8, rating: 4.8 },
-];
-
-const UPCOMING_BOOKINGS = [
-  { day: 'Saturday', space: 'Modern Meeting Room', start: '18:00', end: '21:00', guests: 3, total: 82.5 },
-  { day: 'Sunday', space: 'Executive Boardroom', start: '10:00', end: '13:00', guests: 8, total: 135 },
-];
-
-const MONTHLY_EARNINGS = 1240;
-const OFFICEBNB_FEE_SHARE = Math.round(MONTHLY_EARNINGS * (1 / 9));
+const OWNER_BUSINESS_NAME = "Sarah's Workspace";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { lastBooking } = useApp();
   const [actionModal, setActionModal] = useState<string | null>(null);
+  const [spaces, setSpaces] = useState<Listing[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchListingsByBusinessName(OWNER_BUSINESS_NAME)
+      .then(async (ownedSpaces) => {
+        if (cancelled) return;
+        setSpaces(ownedSpaces);
+        const ownedBookings = await fetchBookingsForListingIds(ownedSpaces.map((s) => s.id));
+        if (cancelled) return;
+        setBookings(ownedBookings);
+      })
+      .catch((err) => console.error('Failed to load dashboard data', err))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const monthlyEarnings = bookings.reduce((sum, b) => sum + b.total, 0);
+  const officebnbFeeShare = bookings.reduce((sum, b) => sum + b.serviceFee, 0);
+  const averageRating = spaces.length
+    ? (spaces.reduce((sum, s) => sum + s.rating, 0) / spaces.length).toFixed(1)
+    : '—';
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -49,16 +67,16 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatsCard label="Monthly earnings" value={formatCurrency(MONTHLY_EARNINGS)} icon={Wallet} trend="+18%" />
-        <StatsCard label="Bookings" value="18" icon={CalendarCheck} accent="amber" />
+        <StatsCard label="Total earnings" value={formatCurrency(monthlyEarnings)} icon={Wallet} trend="live" />
+        <StatsCard label="Bookings" value={String(bookings.length)} icon={CalendarCheck} accent="amber" />
         <StatsCard label="Occupancy" value="68%" icon={TrendingUp} accent="ink" />
-        <StatsCard label="Average rating" value="4.9" icon={Star} accent="brand" />
+        <StatsCard label="Average rating" value={averageRating} icon={Star} accent="brand" />
       </div>
 
       <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50 p-5 text-sm text-ink-700 sm:flex sm:items-center sm:justify-between">
         <p>
-          Officebnb's 10% service fee on your {formatCurrency(MONTHLY_EARNINGS)} this month means we earned{' '}
-          <span className="font-semibold text-brand-700">~{formatCurrency(OFFICEBNB_FEE_SHARE)}</span> facilitating
+          Officebnb's 10% service fee on your {formatCurrency(monthlyEarnings)} in bookings means we earned{' '}
+          <span className="font-semibold text-brand-700">{formatCurrency(officebnbFeeShare)}</span> facilitating
           your bookings.
         </p>
       </div>
@@ -66,7 +84,7 @@ export default function Dashboard() {
       <div className="mt-8 rounded-2xl border border-ink-100 bg-white p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-bold text-ink-950">Weekly revenue</h2>
-          <span className="text-sm text-ink-500">Last 7 days</span>
+          <span className="text-sm text-ink-500">Illustrative last 7 days</span>
         </div>
         <div className="mt-6">
           <RevenueChart data={REVENUE_DATA} />
@@ -75,67 +93,80 @@ export default function Dashboard() {
 
       <div className="mt-10">
         <h2 className="font-display text-xl font-bold text-ink-950">Your spaces</h2>
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          {OWNER_SPACES.map((space) => (
-            <div key={space.id} className="rounded-2xl border border-ink-100 bg-white p-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-display text-base font-semibold text-ink-950">{space.name}</h3>
-                  <p className="mt-1 text-sm text-ink-500">${space.price}/hour</p>
+        {loading ? (
+          <p className="mt-4 text-sm text-ink-400">Loading your spaces…</p>
+        ) : spaces.length === 0 ? (
+          <p className="mt-4 text-sm text-ink-400">You haven't listed a space yet.</p>
+        ) : (
+          <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            {spaces.map((space) => {
+              const spaceBookings = bookings.filter((b) => b.listingId === space.id).length;
+              return (
+                <div key={space.id} className="rounded-2xl border border-ink-100 bg-white p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-display text-base font-semibold text-ink-950">{space.name}</h3>
+                      <p className="mt-1 text-sm text-ink-500">${space.price}/hour</p>
+                    </div>
+                    <span className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                      <Star size={12} className="fill-brand-600 text-brand-600" /> {space.rating}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm text-ink-500">
+                    {spaceBookings} booking{spaceBookings === 1 ? '' : 's'} so far
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setActionModal(`edit-${space.name}`)}>
+                      Edit
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setActionModal(`availability-${space.name}`)}>
+                      Manage availability
+                    </Button>
+                  </div>
                 </div>
-                <span className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                  <Star size={12} className="fill-brand-600 text-brand-600" /> {space.rating}
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-ink-500">{space.bookings} bookings this month</p>
-              <div className="mt-4 flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setActionModal(`edit-${space.name}`)}>
-                  Edit
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setActionModal(`availability-${space.name}`)}>
-                  Manage availability
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="mt-10">
         <h2 className="font-display text-xl font-bold text-ink-950">Upcoming bookings</h2>
-        <div className="mt-4 space-y-3">
-          {lastBooking && (
-            <div className="flex flex-col gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-display text-sm font-bold text-ink-950">Just booked</p>
-                  <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    New
-                  </span>
+        {loading ? (
+          <p className="mt-4 text-sm text-ink-400">Loading bookings…</p>
+        ) : bookings.length === 0 ? (
+          <p className="mt-4 text-sm text-ink-400">No bookings yet — they'll show up here the moment someone books your space.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {bookings.map((booking) => {
+              const isNew = lastBooking?.id === booking.id;
+              return (
+                <div
+                  key={booking.id}
+                  className={`flex flex-col gap-3 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between ${
+                    isNew ? 'border-brand-200 bg-brand-50' : 'border-ink-100 bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-display text-sm font-bold text-ink-950">{booking.date}</p>
+                      {isNew && (
+                        <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          New
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-ink-500">
+                      {booking.listingName} · {formatTime(booking.startTime)} – {formatTime(booking.endTime)} ·{' '}
+                      {booking.guests} guests
+                    </p>
+                  </div>
+                  <p className="font-display text-lg font-bold text-ink-950">{formatCurrency(booking.total)}</p>
                 </div>
-                <p className="mt-1 text-sm text-ink-700">
-                  {lastBooking.listingName} · {lastBooking.date} · {formatTime(lastBooking.startTime)} –{' '}
-                  {formatTime(lastBooking.endTime)} · {lastBooking.guests} guests
-                </p>
-              </div>
-              <p className="font-display text-lg font-bold text-ink-950">{formatCurrency(lastBooking.total)}</p>
-            </div>
-          )}
-          {UPCOMING_BOOKINGS.map((booking) => (
-            <div
-              key={booking.day + booking.space}
-              className="flex flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="font-display text-sm font-bold text-ink-950">{booking.day}</p>
-                <p className="mt-1 text-sm text-ink-500">
-                  {booking.space} · {formatTime(booking.start)} – {formatTime(booking.end)} · {booking.guests} guests
-                </p>
-              </div>
-              <p className="font-display text-lg font-bold text-ink-950">{formatCurrency(booking.total)}</p>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <Modal open={!!actionModal} onClose={() => setActionModal(null)} maxWidth="max-w-sm">

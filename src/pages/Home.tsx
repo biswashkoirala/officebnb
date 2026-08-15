@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -13,9 +14,9 @@ import {
 import SearchBar from '../components/SearchBar';
 import ListingCard from '../components/ListingCard';
 import Button from '../components/Button';
-import { listings } from '../data/listings';
+import { fetchListings } from '../lib/api';
 import { useApp } from '../context/AppContext';
-import type { SearchParams } from '../types';
+import type { Listing, SearchParams } from '../types';
 
 const RENTER_STEPS = [
   { icon: SearchIcon, title: 'Find', description: 'Discover professional spaces near you.' },
@@ -32,6 +33,16 @@ const OWNER_STEPS = [
 export default function Home() {
   const navigate = useNavigate();
   const { searchParams, setSearchParams } = useApp();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchListings()
+      .then(setListings)
+      .catch((err) => console.error('Failed to load listings', err))
+      .finally(() => setLoading(false));
+  }, []);
+
   const featured = listings.filter((l) => l.featured).slice(0, 6);
   const popular = featured.length >= 6 ? featured : listings.slice(0, 6);
 
@@ -143,11 +154,19 @@ export default function Home() {
             </Button>
           </div>
 
-          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {popular.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
+          {loading ? (
+            <p className="mt-10 text-sm text-ink-400">Loading spaces…</p>
+          ) : popular.length === 0 ? (
+            <p className="mt-10 text-sm text-ink-400">
+              No spaces yet — seed your Supabase database to see listings here.
+            </p>
+          ) : (
+            <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {popular.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

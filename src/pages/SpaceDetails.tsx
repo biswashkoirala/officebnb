@@ -1,20 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Heart, MapPin, Share2, Star, Users } from 'lucide-react';
-import { getListingById } from '../data/listings';
+import { fetchListingById } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import AmenityList from '../components/AmenityList';
 import BookingCard from '../components/BookingCard';
 import ListingImage from '../components/ListingImage';
 import Button from '../components/Button';
 import { formatTime } from '../lib/utils';
+import type { Listing } from '../types';
 
 export default function SpaceDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const listing = id ? getListingById(id) : undefined;
   const { isFavorite, toggleFavorite } = useApp();
   const [activeImage, setActiveImage] = useState(0);
+  const [listing, setListing] = useState<Listing | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!id) return;
+    setListing(undefined);
+    fetchListingById(id)
+      .then(setListing)
+      .catch((err) => {
+        console.error('Failed to load listing', err);
+        setListing(null);
+      });
+  }, [id]);
+
+  if (listing === undefined) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+        <p className="text-sm text-ink-400">Loading space…</p>
+      </div>
+    );
+  }
 
   if (!listing) {
     return (

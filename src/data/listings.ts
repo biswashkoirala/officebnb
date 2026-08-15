@@ -1,3 +1,6 @@
+// Seed source for supabase/schema.sql — not imported by the app itself.
+// The app reads listings from Supabase (see src/lib/api.ts); this file exists
+// only so the seed SQL can be regenerated if the data ever needs to change.
 import type { Listing } from '../types';
 
 const img = (id: string) =>
@@ -58,7 +61,7 @@ export const listings: Listing[] = [
       'A premium executive boardroom with harbour views in Barangaroo. Perfect for board meetings, client presentations, and high-stakes negotiations.',
     price: 45,
     capacity: 10,
-    rating: 4.9,
+    rating: 4.8,
     reviewCount: 32,
     amenities: ['Wi-Fi', 'Large display', 'Video conferencing', 'Air conditioning', 'Kitchen access', 'Power outlets', 'Parking'],
     availableHours: {
@@ -66,7 +69,7 @@ export const listings: Listing[] = [
       weekends: { start: '09:00', end: '18:00' },
     },
     images: [img('photo-1568992687947-868a62a9f521'), img('photo-1522071820081-009f0129c71c'), img('photo-1573164713988-8665fc963095')],
-    host: { name: 'Priya Nair', businessName: 'Harbourview Chambers', avatar: img('photo-1544005313-94ddf0286df2'), responseTime: 'within an hour', joined: '2021' },
+    host: { name: 'Sarah Johnson', businessName: "Sarah's Workspace", avatar: img('photo-1494790108377-be9c29b29330'), responseTime: 'within an hour', joined: '2023' },
     bookingsCount: 8,
     featured: true,
   },

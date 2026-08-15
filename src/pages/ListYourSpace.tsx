@@ -4,6 +4,7 @@ import { Camera, Check, PartyPopper } from 'lucide-react';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
+import { createListing } from '../lib/api';
 import type { SpaceType } from '../types';
 
 const SPACE_TYPES: SpaceType[] = [
@@ -32,6 +33,8 @@ export default function ListYourSpace() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [success, setSuccess] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
 
   const [name, setName] = useState('');
   const [type, setType] = useState<SpaceType>('Meeting Room');
@@ -60,9 +63,32 @@ export default function ListYourSpace() {
   const handleNext = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
   const handleBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const handlePublish = (e: FormEvent) => {
+  const handlePublish = async (e: FormEvent) => {
     e.preventDefault();
-    setSuccess(true);
+    setPublishing(true);
+    setPublishError('');
+    try {
+      await createListing({
+        name,
+        location,
+        type,
+        description,
+        capacity,
+        price,
+        amenities,
+        availableHours: {
+          weekdays: { start: weekdayStart, end: weekdayEnd },
+          weekends: { start: weekendStart, end: weekendEnd },
+        },
+        images: photos,
+      });
+      setSuccess(true);
+    } catch (err) {
+      console.error('Failed to publish listing', err);
+      setPublishError('Something went wrong publishing your space. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -262,9 +288,12 @@ export default function ListYourSpace() {
               Continue
             </Button>
           ) : (
-            <Button type="submit">Publish your space</Button>
+            <Button type="submit" disabled={publishing}>
+              {publishing ? 'Publishing…' : 'Publish your space'}
+            </Button>
           )}
         </div>
+        {publishError && <p className="mt-3 text-right text-sm font-medium text-red-600">{publishError}</p>}
       </form>
 
       <Modal open={success} onClose={() => setSuccess(false)} maxWidth="max-w-sm">

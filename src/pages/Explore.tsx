@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import FilterPanel from '../components/FilterPanel';
 import ListingCard from '../components/ListingCard';
 import Button from '../components/Button';
-import { listings } from '../data/listings';
+import { fetchListings } from '../lib/api';
 import { useApp } from '../context/AppContext';
-import type { FilterState } from '../types';
+import type { FilterState, Listing } from '../types';
 
 const DEFAULT_FILTERS: FilterState = {
   priceMax: 60,
@@ -33,6 +33,15 @@ export default function Explore() {
   const { searchParams, setSearchParams } = useApp();
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchListings()
+      .then(setListings)
+      .catch((err) => console.error('Failed to load listings', err))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = useMemo(() => {
     const locationQuery = searchParams.location.trim().toLowerCase();
@@ -50,13 +59,15 @@ export default function Explore() {
       if (filters.weekendAvailability && listing.availableHours.weekends.start > '09:00') return false;
       return true;
     });
-  }, [filters, searchParams]);
+  }, [filters, searchParams, listings]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="font-display text-3xl font-bold text-ink-950">Find your perfect workspace</h1>
-        <p className="mt-1 text-ink-500">{filtered.length} spaces available for your search.</p>
+        <p className="mt-1 text-ink-500">
+          {loading ? 'Loading spaces…' : `${filtered.length} spaces available for your search.`}
+        </p>
       </div>
 
       <SearchBar initial={searchParams} onSearch={setSearchParams} variant="compact" />
@@ -75,7 +86,11 @@ export default function Explore() {
         </aside>
 
         <div>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white py-24 text-center">
+              <p className="text-sm text-ink-400">Loading spaces…</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white py-24 text-center">
               <p className="font-display text-lg font-semibold text-ink-900">No spaces match your filters</p>
               <p className="mt-1 text-sm text-ink-500">Try widening your search or resetting filters.</p>

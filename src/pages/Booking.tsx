@@ -1,17 +1,29 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, Lock, ShieldCheck } from 'lucide-react';
-import { getListingById } from '../data/listings';
+import { createBooking, fetchListingById } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatTime, generateBookingReference, hoursBetween, priceBreakdown } from '../lib/utils';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import type { Listing } from '../types';
 
 export default function Booking() {
   const navigate = useNavigate();
   const { bookingDraft, setLastBooking } = useApp();
   const [processing, setProcessing] = useState(false);
-  const listing = bookingDraft ? getListingById(bookingDraft.listingId) : undefined;
+  const [error, setError] = useState('');
+  const [listing, setListing] = useState<Listing | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!bookingDraft) return;
+    fetchListingById(bookingDraft.listingId)
+      .then(setListing)
+      .catch((err) => {
+        console.error('Failed to load listing', err);
+        setListing(null);
+      });
+  }, [bookingDraft]);
 
   const hours = useMemo(
     () => (bookingDraft ? hoursBetween(bookingDraft.startTime, bookingDraft.endTime) : 0),
@@ -22,7 +34,7 @@ export default function Booking() {
     [listing, hours],
   );
 
-  if (!bookingDraft || !listing) {
+  if (!bookingDraft || listing === null) {
     return (
       <div className="mx-auto max-w-lg px-4 py-24 text-center">
         <h1 className="font-display text-2xl font-bold text-ink-950">No booking in progress</h1>
@@ -34,12 +46,20 @@ export default function Booking() {
     );
   }
 
-  const handleConfirm = (e: FormEvent) => {
+  if (!listing) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <p className="text-sm text-ink-400">Loading booking…</p>
+      </div>
+    );
+  }
+
+  const handleConfirm = async (e: FormEvent) => {
     e.preventDefault();
     setProcessing(true);
-    setTimeout(() => {
-      setLastBooking({
-        id: crypto.randomUUID(),
+    setError('');
+    try {
+      const booking = await createBooking({
         listingId: listing.id,
         listingName: listing.name,
         location: listing.location,
@@ -54,9 +74,13 @@ export default function Booking() {
         reference: generateBookingReference(),
         hostName: listing.host.businessName,
       });
-      setProcessing(false);
+      setLastBooking(booking);
       navigate('/confirmation');
-    }, 900);
+    } catch (err) {
+      console.error('Failed to create booking', err);
+      setError('Something went wrong confirming your booking. Please try again.');
+      setProcessing(false);
+    }
   };
 
   return (
@@ -87,6 +111,8 @@ export default function Booking() {
               <Input label="Name on card" placeholder="Alex Renter" defaultValue="Alex Renter" required />
             </div>
           </div>
+
+          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
           <Button type="submit" size="lg" fullWidth disabled={processing}>
             {processing ? 'Processing…' : `Confirm & Pay ${formatCurrency(total)}`}
