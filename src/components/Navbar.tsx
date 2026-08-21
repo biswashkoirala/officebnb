@@ -1,13 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Building2, Menu, X } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Menu, User, X } from 'lucide-react';
 import Button from './Button';
 import { useApp } from '../context/AppContext';
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-  const { isLoggedIn, openLoginModal } = useApp();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const { isLoggedIn, openLoginModal, logout } = useApp();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [accountOpen]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `text-sm font-medium transition-colors hover:text-ink-950 ${isActive ? 'text-ink-950' : 'text-ink-600'}`;
@@ -36,9 +49,41 @@ export default function Navbar() {
 
         <div className="hidden items-center gap-2 md:flex">
           {isLoggedIn ? (
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
-              Dashboard
-            </Button>
+            <div className="relative" ref={accountRef}>
+              <button
+                onClick={() => setAccountOpen((v) => !v)}
+                aria-label="Account menu"
+                aria-expanded={accountOpen}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white transition-colors hover:bg-brand-700"
+              >
+                <User size={17} strokeWidth={2.25} />
+              </button>
+              {accountOpen && (
+                <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-ink-100 bg-white py-1.5 shadow-lg shadow-ink-950/5">
+                  <button
+                    onClick={() => {
+                      navigate('/dashboard');
+                      setAccountOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-ink-700 hover:bg-ink-50"
+                  >
+                    <LayoutDashboard size={16} />
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setAccountOpen(false);
+                      navigate('/');
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-ink-700 hover:bg-ink-50"
+                  >
+                    <LogOut size={16} />
+                    Log out
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <Button variant="ghost" size="sm" onClick={openLoginModal}>
               Log in
@@ -72,16 +117,35 @@ export default function Navbar() {
             </NavLink>
             <div className="mt-2 flex flex-col gap-2 border-t border-ink-100 pt-3">
               {isLoggedIn ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    navigate('/dashboard');
-                    setOpen(false);
-                  }}
-                >
-                  Dashboard
-                </Button>
+                <>
+                  <div className="flex items-center gap-2 px-1 py-1 text-sm font-medium text-ink-950">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-white">
+                      <User size={14} strokeWidth={2.25} />
+                    </span>
+                    Your account
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigate('/dashboard');
+                      setOpen(false);
+                    }}
+                  >
+                    Dashboard
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      logout();
+                      setOpen(false);
+                      navigate('/');
+                    }}
+                  >
+                    Log out
+                  </Button>
+                </>
               ) : (
                 <Button
                   variant="ghost"
