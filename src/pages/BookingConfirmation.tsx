@@ -73,7 +73,7 @@ export default function BookingConfirmation() {
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <Button fullWidth size="lg" onClick={() => navigate('/dashboard')}>
+        <Button fullWidth size="lg" onClick={() => navigate('/my-bookings')}>
           View booking
         </Button>
         <Button fullWidth size="lg" variant="outline" onClick={() => navigate('/explore')}>

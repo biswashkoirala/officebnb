@@ -8,6 +8,7 @@ import SpaceDetails from './pages/SpaceDetails';
 import Booking from './pages/Booking';
 import BookingConfirmation from './pages/BookingConfirmation';
 import Dashboard from './pages/Dashboard';
+import MyBookings from './pages/MyBookings';
 import ListYourSpace from './pages/ListYourSpace';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/booking" element={<Booking />} />
             <Route path="/confirmation" element={<BookingConfirmation />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/my-bookings" element={<MyBookings />} />
             <Route path="/list-your-space" element={<ListYourSpace />} />
             <Route path="*" element={<Home />} />
           </Route>

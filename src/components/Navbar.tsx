@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Building2, LayoutDashboard, LogOut, Menu, User, X } from 'lucide-react';
+import { Building2, CalendarCheck, LayoutDashboard, LogOut, Menu, User, X } from 'lucide-react';
 import Button from './Button';
 import { useApp } from '../context/AppContext';
 
@@ -59,7 +59,17 @@ export default function Navbar() {
                 <User size={17} strokeWidth={2.25} />
               </button>
               {accountOpen && (
-                <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-ink-100 bg-white py-1.5 shadow-lg shadow-ink-950/5">
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-ink-100 bg-white py-1.5 shadow-lg shadow-ink-950/5">
+                  <button
+                    onClick={() => {
+                      navigate('/my-bookings');
+                      setAccountOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-ink-700 hover:bg-ink-50"
+                  >
+                    <CalendarCheck size={16} />
+                    Your bookings
+                  </button>
                   <button
                     onClick={() => {
                       navigate('/dashboard');
@@ -124,6 +134,16 @@ export default function Navbar() {
                     </span>
                     Your account
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigate('/my-bookings');
+                      setOpen(false);
+                    }}
+                  >
+                    Your bookings
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

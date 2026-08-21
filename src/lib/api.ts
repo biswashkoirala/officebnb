@@ -196,6 +196,17 @@ export async function fetchBookingsForListingIds(listingIds: string[]): Promise<
   return (data as BookingRow[]).map(mapBooking);
 }
 
+export async function fetchBookingsByIds(ids: string[]): Promise<Booking[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .in('id', ids)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as BookingRow[]).map(mapBooking);
+}
+
 export async function fetchListingsByBusinessName(businessName: string): Promise<Listing[]> {
   const { data, error } = await supabase
     .from('listings')

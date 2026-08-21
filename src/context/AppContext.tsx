@@ -19,6 +19,7 @@ interface AppContextValue {
   setBookingDraft: (draft: BookingDraft) => void;
   lastBooking: Booking | null;
   setLastBooking: (booking: Booking) => void;
+  myBookingIds: string[];
   isLoggedIn: boolean;
   login: () => void;
   logout: () => void;
@@ -28,6 +29,7 @@ interface AppContextValue {
 }
 
 const FAVORITES_KEY = 'officebnb:favorites';
+const MY_BOOKINGS_KEY = 'officebnb:my-bookings';
 
 const defaultSearchParams: SearchParams = {
   location: 'Sydney CBD',
@@ -50,7 +52,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [searchParams, setSearchParams] = useState<SearchParams>(defaultSearchParams);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
-  const [lastBooking, setLastBooking] = useState<Booking | null>(null);
+  const [lastBooking, setLastBookingState] = useState<Booking | null>(null);
+  const [myBookingIds, setMyBookingIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(MY_BOOKINGS_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
@@ -61,6 +71,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // ignore persistence errors in demo mode
     }
   }, [favorites]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MY_BOOKINGS_KEY, JSON.stringify(myBookingIds));
+    } catch {
+      // ignore persistence errors in demo mode
+    }
+  }, [myBookingIds]);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -81,7 +99,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bookingDraft,
       setBookingDraft,
       lastBooking,
-      setLastBooking,
+      setLastBooking: (booking: Booking) => {
+        setLastBookingState(booking);
+        setMyBookingIds((prev) => (prev.includes(booking.id) ? prev : [...prev, booking.id]));
+      },
+      myBookingIds,
       isLoggedIn,
       login: () => {
         setIsLoggedIn(true);
@@ -92,7 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openLoginModal: () => setLoginModalOpen(true),
       closeLoginModal: () => setLoginModalOpen(false),
     }),
-    [favorites, searchParams, bookingDraft, lastBooking, isLoggedIn, loginModalOpen],
+    [favorites, searchParams, bookingDraft, lastBooking, myBookingIds, isLoggedIn, loginModalOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
