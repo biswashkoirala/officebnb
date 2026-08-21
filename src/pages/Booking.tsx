@@ -10,7 +10,7 @@ import type { Listing } from '../types';
 
 export default function Booking() {
   const navigate = useNavigate();
-  const { bookingDraft, setLastBooking } = useApp();
+  const { bookingDraft, setLastBooking, isLoggedIn, openLoginModal } = useApp();
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [listing, setListing] = useState<Listing | null | undefined>(undefined);
@@ -41,6 +41,18 @@ export default function Booking() {
         <p className="mt-2 text-ink-500">Find a space and choose your hours to start a booking.</p>
         <Button className="mt-6" onClick={() => navigate('/explore')}>
           Explore spaces
+        </Button>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <h1 className="font-display text-2xl font-bold text-ink-950">Log in to continue</h1>
+        <p className="mt-2 text-ink-500">You'll need to log in before confirming your booking.</p>
+        <Button className="mt-6" onClick={openLoginModal}>
+          Log in
         </Button>
       </div>
     );

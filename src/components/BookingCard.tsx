@@ -22,7 +22,7 @@ const TIME_OPTIONS = Array.from({ length: 32 }, (_, i) => {
 
 export default function BookingCard({ listing }: BookingCardProps) {
   const navigate = useNavigate();
-  const { searchParams, setBookingDraft } = useApp();
+  const { searchParams, setBookingDraft, isLoggedIn, openLoginModal } = useApp();
   const [date, setDate] = useState(searchParams.date);
   const [startTime, setStartTime] = useState(searchParams.startTime);
   const [endTime, setEndTime] = useState(searchParams.endTime);
@@ -42,6 +42,7 @@ export default function BookingCard({ listing }: BookingCardProps) {
     }
     setError('');
     setBookingDraft({ listingId: listing.id, date, startTime, endTime, guests });
+    if (!isLoggedIn) openLoginModal();
     navigate('/booking');
   };
 
