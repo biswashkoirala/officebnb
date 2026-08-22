@@ -28,6 +28,7 @@ interface AppContextValue {
   role: 'renter' | 'owner' | null;
   displayName: string | null;
   businessName: string | null;
+  needsProfileSetup: boolean;
   applyProfile: (profile: Profile) => void;
   logout: () => void;
   loginModalOpen: boolean;
@@ -61,6 +62,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastBooking, setLastBooking] = useState<Booking | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
@@ -86,14 +88,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setProfile(null);
+      setProfileLoading(false);
       return;
     }
     let cancelled = false;
+    setProfileLoading(true);
     fetchProfile(user.id)
       .then((p) => {
         if (!cancelled) setProfile(p);
       })
-      .catch((err) => console.error('Failed to load profile', err));
+      .catch((err) => console.error('Failed to load profile', err))
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -125,6 +132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       role: profile?.role ?? null,
       displayName: profile?.name ?? null,
       businessName: profile?.businessName ?? null,
+      needsProfileSetup: !!user && !authLoading && !profileLoading && !profile,
       applyProfile: setProfile,
       logout: () => {
         supabase.auth.signOut();
@@ -133,7 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openLoginModal: () => setLoginModalOpen(true),
       closeLoginModal: () => setLoginModalOpen(false),
     }),
-    [favorites, searchParams, bookingDraft, lastBooking, user, profile, authLoading, loginModalOpen],
+    [favorites, searchParams, bookingDraft, lastBooking, user, profile, authLoading, profileLoading, loginModalOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

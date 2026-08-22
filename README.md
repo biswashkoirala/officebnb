@@ -42,10 +42,28 @@ grant select, insert on public.listings to anon, authenticated;
 grant select, insert on public.bookings to anon, authenticated;
 ```
 
-Signup/login use real Supabase Auth (email + password). For a smoother demo, turn off
-**Authentication → Sign In / Providers → Email → Confirm email** in the Supabase
-dashboard so new accounts can log in immediately instead of needing to click a
+Signup/login use real Supabase Auth (email + password, or Google). For a smoother demo,
+turn off **Authentication → Sign In / Providers → Email → Confirm email** in the
+Supabase dashboard so new accounts can log in immediately instead of needing to click a
 confirmation link — it's a project setting, safe to toggle back on later.
+
+To enable **Sign in with Google**:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create
+   an OAuth 2.0 Client ID (Web application). Add your Supabase callback URL as an
+   Authorized redirect URI — it's shown on the Google provider settings page in step 2
+   below, typically `https://<project-ref>.supabase.co/auth/v1/callback`. Add
+   `http://localhost:5173` (and `5174`, etc. for other dev ports) plus your production
+   URL as Authorized JavaScript origins.
+2. In the Supabase dashboard, go to **Authentication → Sign In / Providers → Google**,
+   enable it, and paste in the Client ID and Client Secret from step 1.
+3. Under **Authentication → URL Configuration**, make sure **Site URL** (and, for
+   preview/dev, **Redirect URLs**) includes the URL the app runs on, since that's where
+   Google redirects back to after sign-in.
+
+Google accounts skip the signup form's role/business-name fields, so first-time Google
+sign-ins are prompted to finish setup (choose renter/owner, business name if owner)
+before continuing.
 
 ## Pages
 

@@ -3,6 +3,7 @@ import Navbar from './Navbar';
 import Footer from './Footer';
 import DemoBadge from './DemoBadge';
 import LoginModal from './LoginModal';
+import CompleteProfileModal from './CompleteProfileModal';
 
 export default function Layout() {
   return (
@@ -14,6 +15,7 @@ export default function Layout() {
       <Footer />
       <DemoBadge />
       <LoginModal />
+      <CompleteProfileModal />
     </div>
   );
 }
