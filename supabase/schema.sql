@@ -4,6 +4,27 @@
 
 drop table if exists public.bookings;
 drop table if exists public.listings;
+drop table if exists public.profiles;
+
+-- ---------------------------------------------------------------------------
+-- Profiles: one row per signed-up user, created once at signup. Holds the
+-- role (renter/owner) and, for owners, their business name. There is no
+-- update policy below, so once written these fields can never be changed by
+-- the user — a renter can't self-promote to owner after the fact, and this
+-- is what the "Owners insert own listings" policy actually checks.
+-- ---------------------------------------------------------------------------
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  role text not null check (role in ('renter', 'owner')),
+  name text not null,
+  business_name text,
+  created_at timestamptz not null default now()
+);
+
+-- Case-insensitive uniqueness so a new signup can't claim a business name
+-- another account already owns.
+create unique index profiles_business_name_key on public.profiles (lower(business_name))
+  where business_name is not null;
 
 -- ---------------------------------------------------------------------------
 -- Listings: every space available on the marketplace, including ones created
@@ -57,19 +78,31 @@ create table public.bookings (
 -- but creating a listing or a booking requires a real signed-in Supabase Auth
 -- user, and each row is owned by that user (owner_id / user_id). Bookings are
 -- only readable by the renter who made them or the owner of the listing.
+-- Creating a listing additionally requires the signed-in user's profile to
+-- have role = 'owner' — enforced here in the database, not just in the UI.
 -- ---------------------------------------------------------------------------
+alter table public.profiles enable row level security;
 alter table public.listings enable row level security;
 alter table public.bookings enable row level security;
 
 grant usage on schema public to anon, authenticated;
+grant select, insert on public.profiles to authenticated;
 grant select on public.listings to anon, authenticated;
 grant insert on public.listings to authenticated;
 grant select, insert on public.bookings to authenticated;
 
+create policy "Users read own profile" on public.profiles
+  for select using (auth.uid() = id);
+create policy "Users insert own profile" on public.profiles
+  for insert with check (auth.uid() = id);
+
 create policy "Public read listings" on public.listings
   for select using (true);
 create policy "Owners insert own listings" on public.listings
-  for insert with check (auth.uid() = owner_id);
+  for insert with check (
+    auth.uid() = owner_id
+    and exists (select 1 from public.profiles where id = auth.uid() and role = 'owner')
+  );
 
 create policy "Users read own bookings" on public.bookings
   for select using (

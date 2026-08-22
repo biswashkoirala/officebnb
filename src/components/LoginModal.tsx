@@ -5,13 +5,14 @@ import Modal from './Modal';
 import Button from './Button';
 import Input from './Input';
 import { supabase } from '../lib/supabaseClient';
+import { createProfile, fetchProfile } from '../lib/api';
 import { useApp } from '../context/AppContext';
 
 type Mode = 'login' | 'signup';
 type Role = 'renter' | 'owner';
 
 export default function LoginModal() {
-  const { loginModalOpen, closeLoginModal } = useApp();
+  const { loginModalOpen, closeLoginModal, applyProfile } = useApp();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<Mode>('login');
@@ -51,19 +52,38 @@ export default function LoginModal() {
       if (mode === 'login') {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
+        const loggedInProfile = data.user ? await fetchProfile(data.user.id) : null;
+        if (loggedInProfile) applyProfile(loggedInProfile);
         handleClose();
-        if (data.user?.user_metadata?.role === 'owner') navigate('/dashboard');
+        if (loggedInProfile?.role === 'owner') navigate('/dashboard');
       } else {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { name, role, businessName: role === 'owner' ? businessName : null } },
-        });
+        const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
-        if (!data.session) {
+        if (!data.session || !data.user) {
           setError('Check your email to confirm your account, then log in.');
           setLoading(false);
           return;
+        }
+        try {
+          const newProfile = await createProfile({
+            id: data.user.id,
+            role,
+            name,
+            businessName: role === 'owner' ? businessName : null,
+          });
+          applyProfile(newProfile);
+        } catch (profileErr) {
+          await supabase.auth.signOut();
+          const isDuplicateName =
+            profileErr &&
+            typeof profileErr === 'object' &&
+            'code' in profileErr &&
+            (profileErr as { code: string }).code === '23505';
+          throw new Error(
+            isDuplicateName
+              ? 'That business name is already taken. Please choose another.'
+              : 'Something went wrong finishing your signup. Please try again.',
+          );
         }
         handleClose();
         if (role === 'owner') navigate('/dashboard');

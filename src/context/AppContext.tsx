@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { fetchProfile, type Profile } from '../lib/api';
 import type { Booking, SearchParams } from '../types';
 
 interface BookingDraft {
@@ -27,6 +28,7 @@ interface AppContextValue {
   role: 'renter' | 'owner' | null;
   displayName: string | null;
   businessName: string | null;
+  applyProfile: (profile: Profile) => void;
   logout: () => void;
   loginModalOpen: boolean;
   openLoginModal: () => void;
@@ -58,6 +60,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
   const [lastBooking, setLastBooking] = useState<Booking | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
@@ -79,6 +82,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => subscription.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    let cancelled = false;
+    fetchProfile(user.id)
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch((err) => console.error('Failed to load profile', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -103,9 +122,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user,
       authLoading,
       isLoggedIn: !!user,
-      role: (user?.user_metadata?.role as 'renter' | 'owner' | undefined) ?? null,
-      displayName: (user?.user_metadata?.name as string | undefined) ?? null,
-      businessName: (user?.user_metadata?.businessName as string | undefined) ?? null,
+      role: profile?.role ?? null,
+      displayName: profile?.name ?? null,
+      businessName: profile?.businessName ?? null,
+      applyProfile: setProfile,
       logout: () => {
         supabase.auth.signOut();
       },
@@ -113,7 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openLoginModal: () => setLoginModalOpen(true),
       closeLoginModal: () => setLoginModalOpen(false),
     }),
-    [favorites, searchParams, bookingDraft, lastBooking, user, authLoading, loginModalOpen],
+    [favorites, searchParams, bookingDraft, lastBooking, user, profile, authLoading, loginModalOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

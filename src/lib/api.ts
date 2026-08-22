@@ -1,6 +1,44 @@
 import { supabase } from './supabaseClient';
 import type { AvailableHours, Booking, Host, Listing, SpaceType } from '../types';
 
+export interface Profile {
+  id: string;
+  role: 'renter' | 'owner';
+  name: string;
+  businessName: string | null;
+}
+
+interface ProfileRow {
+  id: string;
+  role: 'renter' | 'owner';
+  name: string;
+  business_name: string | null;
+}
+
+function mapProfile(row: ProfileRow): Profile {
+  return { id: row.id, role: row.role, name: row.name, businessName: row.business_name };
+}
+
+export async function fetchProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  return data ? mapProfile(data as ProfileRow) : null;
+}
+
+export interface NewProfileInput {
+  id: string;
+  role: 'renter' | 'owner';
+  name: string;
+  businessName: string | null;
+}
+
+export async function createProfile(input: NewProfileInput): Promise<Profile> {
+  const row = { id: input.id, role: input.role, name: input.name, business_name: input.businessName };
+  const { data, error } = await supabase.from('profiles').insert(row).select().single();
+  if (error) throw error;
+  return mapProfile(data as ProfileRow);
+}
+
 interface ListingRow {
   id: string;
   name: string;
