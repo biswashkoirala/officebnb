@@ -1,11 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Check, PartyPopper } from 'lucide-react';
+import { Camera, Check, LockKeyhole, PartyPopper } from 'lucide-react';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
 import { createListing } from '../lib/api';
+import { useApp } from '../context/AppContext';
 import type { SpaceType } from '../types';
+
+const DEFAULT_HOST_AVATAR =
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=80';
 
 const SPACE_TYPES: SpaceType[] = [
   'Meeting Room',
@@ -31,6 +35,7 @@ const STEPS = ['Details', 'Amenities', 'Availability', 'Photos', 'Review'];
 
 export default function ListYourSpace() {
   const navigate = useNavigate();
+  const { user, isLoggedIn, role, displayName, businessName, openLoginModal } = useApp();
   const [step, setStep] = useState(0);
   const [success, setSuccess] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -65,6 +70,7 @@ export default function ListYourSpace() {
 
   const handlePublish = async (e: FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setPublishing(true);
     setPublishError('');
     try {
@@ -81,6 +87,14 @@ export default function ListYourSpace() {
           weekends: { start: weekendStart, end: weekendEnd },
         },
         images: photos,
+        ownerId: user.id,
+        host: {
+          name: displayName ?? 'Space owner',
+          businessName: businessName ?? displayName ?? 'Space owner',
+          avatar: DEFAULT_HOST_AVATAR,
+          responseTime: 'within a few hours',
+          joined: String(new Date().getFullYear()),
+        },
       });
       setSuccess(true);
     } catch (err) {
@@ -90,6 +104,24 @@ export default function ListYourSpace() {
       setPublishing(false);
     }
   };
+
+  if (role !== 'owner') {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-ink-100">
+          <LockKeyhole size={22} className="text-ink-500" />
+        </div>
+        <h1 className="mt-5 font-display text-2xl font-bold text-ink-950">List your space</h1>
+        <p className="mt-2 text-ink-500">
+          Only space owner accounts can list a space. Log in with an owner account, or sign up as
+          one, to continue.
+        </p>
+        <Button className="mt-6" onClick={openLoginModal}>
+          {isLoggedIn ? 'Switch to owner account' : 'Log in'}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">

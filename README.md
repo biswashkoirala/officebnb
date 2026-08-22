@@ -6,9 +6,9 @@ An Airbnb-style marketplace for renting unused office spaces — meeting rooms, 
 private offices, training rooms, coworking spaces, and event spaces — during the hours
 businesses aren't using them: evenings, weekends, and public holidays.
 
-Built as a hackathon MVP demo. Listings and bookings are backed by a real Supabase
-database; there's still no real payment processing or auth — checkout is a clearly-labeled
-demo form and login is mocked.
+Built as a hackathon MVP demo. Listings, bookings, and accounts are backed by real
+Supabase (database + auth) — there's still no real payment processing, though; checkout
+is a clearly-labeled demo form.
 
 ## Stack
 
@@ -33,14 +33,19 @@ npm run preview  # preview the production build
 Copy `.env.example` to `.env` and fill in your project's URL and publishable key, then
 run `supabase/schema.sql` once in the Supabase SQL editor (Project → SQL Editor → New
 query) to create the `listings` and `bookings` tables, RLS policies, and seed data. If
-you see 401s from the REST API afterward, the `anon` role likely still needs explicit
-grants:
+you see 401s from the REST API afterward, the `anon`/`authenticated` roles likely still
+need explicit grants:
 
 ```sql
 grant usage on schema public to anon, authenticated;
 grant select, insert on public.listings to anon, authenticated;
 grant select, insert on public.bookings to anon, authenticated;
 ```
+
+Signup/login use real Supabase Auth (email + password). For a smoother demo, turn off
+**Authentication → Sign In / Providers → Email → Confirm email** in the Supabase
+dashboard so new accounts can log in immediately instead of needing to click a
+confirmation link — it's a project setting, safe to toggle back on later.
 
 ## Pages
 
@@ -54,6 +59,6 @@ grant select, insert on public.bookings to anon, authenticated;
 
 ## Notes
 
-- Favorites persist via `localStorage`; listings and bookings persist in Supabase, session/login state is in-memory only.
+- Favorites persist via `localStorage`; listings, bookings, and login sessions persist via Supabase.
 - The "Available now" filter checks the real system clock against each listing's mock hours.
 - Photo "upload" on the listing form selects from a small set of stock thumbnails.

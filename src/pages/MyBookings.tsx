@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Users } from 'lucide-react';
+import { Calendar, Clock, LockKeyhole, MapPin, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { fetchBookingsByIds } from '../lib/api';
+import { fetchBookingsByUserId } from '../lib/api';
 import { formatCurrency, formatTime } from '../lib/utils';
 import Button from '../components/Button';
 import type { Booking } from '../types';
 
 export default function MyBookings() {
   const navigate = useNavigate();
-  const { myBookingIds, lastBooking } = useApp();
+  const { user, isLoggedIn, lastBooking, openLoginModal } = useApp();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchBookingsByIds(myBookingIds)
+    fetchBookingsByUserId(user.id)
       .then((data) => {
         if (!cancelled) setBookings(data);
       })
@@ -25,7 +29,22 @@ export default function MyBookings() {
     return () => {
       cancelled = true;
     };
-  }, [myBookingIds]);
+  }, [user]);
+
+  if (!isLoggedIn) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-ink-100">
+          <LockKeyhole size={22} className="text-ink-500" />
+        </div>
+        <h1 className="mt-5 font-display text-2xl font-bold text-ink-950">Log in to see your bookings</h1>
+        <p className="mt-2 text-ink-500">Your bookings are tied to your account.</p>
+        <Button className="mt-6" onClick={openLoginModal}>
+          Log in
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">

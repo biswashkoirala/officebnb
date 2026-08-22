@@ -18,6 +18,7 @@ interface ListingRow {
   host: Host;
   bookings_count: number;
   featured: boolean;
+  owner_id: string | null;
 }
 
 interface BookingRow {
@@ -36,6 +37,7 @@ interface BookingRow {
   reference: string;
   host_name: string;
   created_at: string;
+  user_id: string | null;
 }
 
 function mapListing(row: ListingRow): Listing {
@@ -103,15 +105,9 @@ export interface NewListingInput {
   amenities: string[];
   availableHours: AvailableHours;
   images: string[];
+  ownerId: string;
+  host: Host;
 }
-
-const DEMO_OWNER_HOST: Host = {
-  name: 'Sarah Johnson',
-  businessName: "Sarah's Workspace",
-  avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=80',
-  responseTime: 'within an hour',
-  joined: '2026',
-};
 
 function slugify(name: string): string {
   const base = name
@@ -139,9 +135,10 @@ export async function createListing(input: NewListingInput): Promise<Listing> {
     images: input.images.length
       ? input.images
       : ['https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80'],
-    host: DEMO_OWNER_HOST,
+    host: input.host,
     bookings_count: 0,
     featured: false,
+    owner_id: input.ownerId,
   };
   const { data, error } = await supabase.from('listings').insert(row).select().single();
   if (error) throw error;
@@ -162,6 +159,7 @@ export interface NewBookingInput {
   total: number;
   reference: string;
   hostName: string;
+  userId: string;
 }
 
 export async function createBooking(input: NewBookingInput): Promise<Booking> {
@@ -179,6 +177,7 @@ export async function createBooking(input: NewBookingInput): Promise<Booking> {
     total: input.total,
     reference: input.reference,
     host_name: input.hostName,
+    user_id: input.userId,
   };
   const { data, error } = await supabase.from('bookings').insert(row).select().single();
   if (error) throw error;
@@ -196,22 +195,21 @@ export async function fetchBookingsForListingIds(listingIds: string[]): Promise<
   return (data as BookingRow[]).map(mapBooking);
 }
 
-export async function fetchBookingsByIds(ids: string[]): Promise<Booking[]> {
-  if (ids.length === 0) return [];
+export async function fetchBookingsByUserId(userId: string): Promise<Booking[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
-    .in('id', ids)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data as BookingRow[]).map(mapBooking);
 }
 
-export async function fetchListingsByBusinessName(businessName: string): Promise<Listing[]> {
+export async function fetchListingsByOwnerId(ownerId: string): Promise<Listing[]> {
   const { data, error } = await supabase
     .from('listings')
     .select('*')
-    .eq('host->>businessName', businessName)
+    .eq('owner_id', ownerId)
     .order('created_at', { ascending: true });
   if (error) throw error;
   return (data as ListingRow[]).map(mapListing);

@@ -26,6 +26,7 @@ create table public.listings (
   host jsonb not null,
   bookings_count integer not null default 0,
   featured boolean not null default false,
+  owner_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -47,26 +48,36 @@ create table public.bookings (
   total numeric not null,
   reference text not null,
   host_name text not null,
+  user_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
--- Row Level Security. This is a no-auth hackathon demo — every visitor shares
--- the same public anon key — so we allow open read/insert on both tables and
--- skip update/delete entirely (nothing in the app needs them).
+-- Row Level Security. Listings stay publicly browsable (it's a marketplace),
+-- but creating a listing or a booking requires a real signed-in Supabase Auth
+-- user, and each row is owned by that user (owner_id / user_id). Bookings are
+-- only readable by the renter who made them or the owner of the listing.
 -- ---------------------------------------------------------------------------
 alter table public.listings enable row level security;
 alter table public.bookings enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select on public.listings to anon, authenticated;
+grant insert on public.listings to authenticated;
+grant select, insert on public.bookings to authenticated;
+
 create policy "Public read listings" on public.listings
   for select using (true);
-create policy "Public insert listings" on public.listings
-  for insert with check (true);
+create policy "Owners insert own listings" on public.listings
+  for insert with check (auth.uid() = owner_id);
 
-create policy "Public read bookings" on public.bookings
-  for select using (true);
-create policy "Public insert bookings" on public.bookings
-  for insert with check (true);
+create policy "Users read own bookings" on public.bookings
+  for select using (
+    auth.uid() = user_id
+    or listing_id in (select id from public.listings where owner_id = auth.uid())
+  );
+create policy "Users insert own bookings" on public.bookings
+  for insert with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
 -- Seed data: the 12 demo Sydney listings.

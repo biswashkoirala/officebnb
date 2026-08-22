@@ -10,7 +10,7 @@ import type { Listing } from '../types';
 
 export default function Booking() {
   const navigate = useNavigate();
-  const { bookingDraft, setLastBooking, isLoggedIn, openLoginModal } = useApp();
+  const { bookingDraft, setLastBooking, user, isLoggedIn, openLoginModal } = useApp();
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [listing, setListing] = useState<Listing | null | undefined>(undefined);
@@ -68,6 +68,7 @@ export default function Booking() {
 
   const handleConfirm = async (e: FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setProcessing(true);
     setError('');
     try {
@@ -85,6 +86,7 @@ export default function Booking() {
         total,
         reference: generateBookingReference(),
         hostName: listing.host.businessName,
+        userId: user.id,
       });
       setLastBooking(booking);
       navigate('/confirmation');

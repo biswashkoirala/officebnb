@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import type { Booking, SearchParams } from '../types';
 
 interface BookingDraft {
@@ -19,10 +21,12 @@ interface AppContextValue {
   setBookingDraft: (draft: BookingDraft) => void;
   lastBooking: Booking | null;
   setLastBooking: (booking: Booking) => void;
-  myBookingIds: string[];
+  user: User | null;
+  authLoading: boolean;
   isLoggedIn: boolean;
   role: 'renter' | 'owner' | null;
-  login: (role: 'renter' | 'owner') => void;
+  displayName: string | null;
+  businessName: string | null;
   logout: () => void;
   loginModalOpen: boolean;
   openLoginModal: () => void;
@@ -30,7 +34,6 @@ interface AppContextValue {
 }
 
 const FAVORITES_KEY = 'officebnb:favorites';
-const MY_BOOKINGS_KEY = 'officebnb:my-bookings';
 
 const defaultSearchParams: SearchParams = {
   location: 'Sydney CBD',
@@ -53,17 +56,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [searchParams, setSearchParams] = useState<SearchParams>(defaultSearchParams);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
-  const [lastBooking, setLastBookingState] = useState<Booking | null>(null);
-  const [myBookingIds, setMyBookingIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem(MY_BOOKINGS_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [role, setRole] = useState<'renter' | 'owner' | null>(null);
+  const [lastBooking, setLastBooking] = useState<Booking | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   useEffect(() => {
@@ -75,12 +70,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [favorites]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(MY_BOOKINGS_KEY, JSON.stringify(myBookingIds));
-    } catch {
-      // ignore persistence errors in demo mode
-    }
-  }, [myBookingIds]);
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setAuthLoading(false);
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.subscription.unsubscribe();
+  }, []);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -101,27 +99,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bookingDraft,
       setBookingDraft,
       lastBooking,
-      setLastBooking: (booking: Booking) => {
-        setLastBookingState(booking);
-        setMyBookingIds((prev) => (prev.includes(booking.id) ? prev : [...prev, booking.id]));
-      },
-      myBookingIds,
-      isLoggedIn,
-      role,
-      login: (nextRole: 'renter' | 'owner') => {
-        setIsLoggedIn(true);
-        setRole(nextRole);
-        setLoginModalOpen(false);
-      },
+      setLastBooking,
+      user,
+      authLoading,
+      isLoggedIn: !!user,
+      role: (user?.user_metadata?.role as 'renter' | 'owner' | undefined) ?? null,
+      displayName: (user?.user_metadata?.name as string | undefined) ?? null,
+      businessName: (user?.user_metadata?.businessName as string | undefined) ?? null,
       logout: () => {
-        setIsLoggedIn(false);
-        setRole(null);
+        supabase.auth.signOut();
       },
       loginModalOpen,
       openLoginModal: () => setLoginModalOpen(true),
       closeLoginModal: () => setLoginModalOpen(false),
     }),
-    [favorites, searchParams, bookingDraft, lastBooking, myBookingIds, isLoggedIn, role, loginModalOpen],
+    [favorites, searchParams, bookingDraft, lastBooking, user, authLoading, loginModalOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

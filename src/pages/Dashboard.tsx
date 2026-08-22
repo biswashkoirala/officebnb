@@ -7,7 +7,7 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatTime } from '../lib/utils';
-import { fetchBookingsForListingIds, fetchListingsByBusinessName } from '../lib/api';
+import { fetchBookingsForListingIds, fetchListingsByOwnerId } from '../lib/api';
 import type { Booking, Listing } from '../types';
 
 const REVENUE_DATA = [
@@ -20,24 +20,22 @@ const REVENUE_DATA = [
   { day: 'Sunday', value: 195 },
 ];
 
-const OWNER_BUSINESS_NAME = "Sarah's Workspace";
-
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { lastBooking, isLoggedIn, role, openLoginModal } = useApp();
+  const { user, lastBooking, isLoggedIn, role, displayName, openLoginModal } = useApp();
   const [actionModal, setActionModal] = useState<string | null>(null);
   const [spaces, setSpaces] = useState<Listing[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (role !== 'owner') {
+    if (role !== 'owner' || !user) {
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetchListingsByBusinessName(OWNER_BUSINESS_NAME)
+    fetchListingsByOwnerId(user.id)
       .then(async (ownedSpaces) => {
         if (cancelled) return;
         setSpaces(ownedSpaces);
@@ -50,7 +48,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [role]);
+  }, [role, user]);
 
   const monthlyEarnings = bookings.reduce((sum, b) => sum + b.total, 0);
   const officebnbFeeShare = bookings.reduce((sum, b) => sum + b.serviceFee, 0);
@@ -80,7 +78,9 @@ export default function Dashboard() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h1 className="font-display text-3xl font-bold text-ink-950">Good afternoon, Sarah 👋</h1>
+          <h1 className="font-display text-3xl font-bold text-ink-950">
+            Good afternoon, {displayName ?? 'there'} 👋
+          </h1>
           <p className="mt-1 text-ink-500">Here's how your unused space is performing.</p>
         </div>
         <Button onClick={() => navigate('/list-your-space')}>
