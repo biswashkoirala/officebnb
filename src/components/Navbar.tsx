@@ -8,7 +8,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
-  const { isLoggedIn, role, openLoginModal, logout } = useApp();
+  const { isLoggedIn, role, displayName, openLoginModal, logout } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -60,6 +60,11 @@ export default function Navbar() {
               </button>
               {accountOpen && (
                 <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-ink-100 bg-white py-1.5 shadow-lg shadow-ink-950/5">
+                  {displayName && (
+                    <div className="truncate border-b border-ink-100 px-3.5 py-2 text-sm font-medium text-ink-950">
+                      {displayName}
+                    </div>
+                  )}
                   <button
                     onClick={() => {
                       navigate('/my-bookings');
@@ -134,7 +139,7 @@ export default function Navbar() {
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-white">
                       <User size={14} strokeWidth={2.25} />
                     </span>
-                    Your account
+                    <span className="truncate">{displayName ?? 'Your account'}</span>
                   </div>
                   <Button
                     variant="ghost"
