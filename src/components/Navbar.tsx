@@ -8,7 +8,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
-  const { isLoggedIn, openLoginModal, logout } = useApp();
+  const { isLoggedIn, role, openLoginModal, logout } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,16 +70,18 @@ export default function Navbar() {
                     <CalendarCheck size={16} />
                     Your bookings
                   </button>
-                  <button
-                    onClick={() => {
-                      navigate('/dashboard');
-                      setAccountOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-ink-700 hover:bg-ink-50"
-                  >
-                    <LayoutDashboard size={16} />
-                    Dashboard
-                  </button>
+                  {role === 'owner' && (
+                    <button
+                      onClick={() => {
+                        navigate('/dashboard');
+                        setAccountOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-ink-700 hover:bg-ink-50"
+                    >
+                      <LayoutDashboard size={16} />
+                      Dashboard
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       logout();
@@ -144,16 +146,18 @@ export default function Navbar() {
                   >
                     Your bookings
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      navigate('/dashboard');
-                      setOpen(false);
-                    }}
-                  >
-                    Dashboard
-                  </Button>
+                  {role === 'owner' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        navigate('/dashboard');
+                        setOpen(false);
+                      }}
+                    >
+                      Dashboard
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"

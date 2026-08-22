@@ -10,7 +10,7 @@ export default function LoginModal() {
   const navigate = useNavigate();
 
   const handleLogin = (asOwner: boolean) => {
-    login();
+    login(asOwner ? 'owner' : 'renter');
     if (asOwner) navigate('/dashboard');
   };
 

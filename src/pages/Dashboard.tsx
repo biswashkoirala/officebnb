@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarCheck, Plus, Star, TrendingUp, Wallet } from 'lucide-react';
+import { CalendarCheck, LockKeyhole, Plus, Star, TrendingUp, Wallet } from 'lucide-react';
 import StatsCard from '../components/StatsCard';
 import RevenueChart from '../components/RevenueChart';
 import Button from '../components/Button';
@@ -24,13 +24,17 @@ const OWNER_BUSINESS_NAME = "Sarah's Workspace";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { lastBooking } = useApp();
+  const { lastBooking, isLoggedIn, role, openLoginModal } = useApp();
   const [actionModal, setActionModal] = useState<string | null>(null);
   const [spaces, setSpaces] = useState<Listing[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (role !== 'owner') {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     fetchListingsByBusinessName(OWNER_BUSINESS_NAME)
@@ -46,13 +50,31 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [role]);
 
   const monthlyEarnings = bookings.reduce((sum, b) => sum + b.total, 0);
   const officebnbFeeShare = bookings.reduce((sum, b) => sum + b.serviceFee, 0);
   const averageRating = spaces.length
     ? (spaces.reduce((sum, s) => sum + s.rating, 0) / spaces.length).toFixed(1)
     : '—';
+
+  if (role !== 'owner') {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-ink-100">
+          <LockKeyhole size={22} className="text-ink-500" />
+        </div>
+        <h1 className="mt-5 font-display text-2xl font-bold text-ink-950">Owner dashboard</h1>
+        <p className="mt-2 text-ink-500">
+          This dashboard is only available to space owners. Log in with an owner account to
+          continue.
+        </p>
+        <Button className="mt-6" onClick={openLoginModal}>
+          {isLoggedIn ? 'Switch to owner account' : 'Log in'}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

@@ -21,7 +21,8 @@ interface AppContextValue {
   setLastBooking: (booking: Booking) => void;
   myBookingIds: string[];
   isLoggedIn: boolean;
-  login: () => void;
+  role: 'renter' | 'owner' | null;
+  login: (role: 'renter' | 'owner') => void;
   logout: () => void;
   loginModalOpen: boolean;
   openLoginModal: () => void;
@@ -62,6 +63,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [role, setRole] = useState<'renter' | 'owner' | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   useEffect(() => {
@@ -105,16 +107,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       myBookingIds,
       isLoggedIn,
-      login: () => {
+      role,
+      login: (nextRole: 'renter' | 'owner') => {
         setIsLoggedIn(true);
+        setRole(nextRole);
         setLoginModalOpen(false);
       },
-      logout: () => setIsLoggedIn(false),
+      logout: () => {
+        setIsLoggedIn(false);
+        setRole(null);
+      },
       loginModalOpen,
       openLoginModal: () => setLoginModalOpen(true),
       closeLoginModal: () => setLoginModalOpen(false),
     }),
-    [favorites, searchParams, bookingDraft, lastBooking, myBookingIds, isLoggedIn, loginModalOpen],
+    [favorites, searchParams, bookingDraft, lastBooking, myBookingIds, isLoggedIn, role, loginModalOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
