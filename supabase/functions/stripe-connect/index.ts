@@ -37,7 +37,10 @@ serve('stripe-connect', async (req, origin) => {
           },
           metadata: { user_id: user.id },
         },
-        { idempotencyKey: `acct-${user.id}` },
+        // Key only stays the same for 10 minutes: enough to collapse a
+        // double click, short enough that a failed attempt (Stripe replays
+        // a saved error for 24h under the same key) can be retried.
+        { idempotencyKey: `acct-${user.id}-${Math.floor(Date.now() / 600_000)}` },
       );
       // Only store it if no account was saved concurrently (double click).
       const { data: saved, error: saveError } = await admin
