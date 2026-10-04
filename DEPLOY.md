@@ -57,11 +57,15 @@ You'll need:
 2. **Connect → Get started**. Choose **Platform or marketplace**, and pick
    **Express** accounts for owners. Fill in the platform profile: you collect
    payments on behalf of owners and pay them out.
-3. **Settings → Connect → Branding**: add your name, icon and colour. Owners see
+3. **Settings → Developers → API policies → Accounts v1 support**: turn it **on**
+   (in test mode *and* again in live mode). New Stripe platforms block the
+   account-creation call this app uses until you do; without it, "Set up
+   payouts" fails with "Stripe no longer recommends Accounts v1".
+4. **Settings → Connect → Branding**: add your name, icon and colour. Owners see
    these during onboarding.
-4. **Settings → Business → Customer emails**: turn on "Successful payments" and
+5. **Settings → Business → Customer emails**: turn on "Successful payments" and
    "Refunds" so renters get Stripe receipts.
-5. Set a **statement descriptor** (Settings → Business → Public details), e.g.
+6. Set a **statement descriptor** (Settings → Business → Public details), e.g.
    `OFFICEBNB`, so renters recognise the charge.
 
 ## 4. Stripe webhooks (two endpoints, same URL)
@@ -156,8 +160,9 @@ Use test card `4242 4242 4242 4242`, any future expiry and any CVC.
 
 ## 10. Switch to live
 
-1. Stripe dashboard → turn off **Test mode**. Recreate **both** webhook endpoints
-   in live mode (step 4). Live endpoints have new signing secrets.
+1. Stripe dashboard → turn off **Test mode**. Turn on **Accounts v1 support** in live
+   mode (step 3.3), then recreate **both** webhook endpoints in live mode (step 4).
+   Live endpoints have new signing secrets.
 2. Replace the three Stripe secrets with the live ones (`npx supabase secrets set STRIPE_SECRET_KEY=sk_live_...`,
    and the same for both webhook secrets), then `npx supabase functions deploy`.
 3. Vercel → set `VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...` → Redeploy.

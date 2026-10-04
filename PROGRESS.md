@@ -1,22 +1,31 @@
-# Where we left off — 4 Oct 2026
+# Where we left off — 5 Oct 2026
 
-## Done
-- Code pushed to GitHub main (commit d663012, 4 Oct). Vercel deployed it and GitHub CI passed.
-  Your local folder has the same files but its git history is behind: run
-  `git fetch origin` then `git reset origin/main` (keeps your files, just syncs history).
-- **Supabase production project `officebnb-prod`** (Sydney, ref `gmkhxdfurmefoikexnpo`):
-  - database migrations applied and verified (incl. new `20260928000100_service_role_grants.sql`)
-  - `listing-photos` storage bucket created
-  - 4 Edge Functions deployed (JWT verification off — each function checks the login itself)
-  - secrets set: SITE_URL, ALLOWED_ORIGINS, STRIPE_SECRET_KEY (test), STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET
-  - Auth Site URL + redirect URL = https://officebnb.vercel.app
-- **Stripe (test mode / sandbox)**: two webhook endpoints created pointing at the stripe-webhook function
-  (payments events + connected-account `account.updated`).
-- **Vercel**: environment variables updated to the new Supabase project + Stripe test key.
+## Live (test mode) at https://officebnb.vercel.app — end-to-end test PASSED
+| Test | Result |
+|---|---|
+| Owner sign-up + profile | ✅ |
+| Stripe Connect payout onboarding | ✅ (needed Stripe "Accounts v1 support" switched on) |
+| Photo upload to Supabase storage | ✅ |
+| Publish listing (host card + "New" rating set by server) | ✅ |
+| Renter checkout holds the slot; abandoned checkout expires + PaymentIntent cancelled | ✅ |
+| Payment with test card → webhook confirms booking ($55 = $50 owner + $5 platform) | ✅ |
+| Same slot again → refused ("That time has just been booked…") | ✅ |
+| Renter cancels >48h ahead → full $55 refund recorded | ✅ |
 
-## Next
-1. Run the test-mode checklist on https://officebnb.vercel.app (DEPLOY.md step 9):
-   owner signs up → Set up payouts (Stripe test onboarding) → list a space →
-   renter books with card 4242 4242 4242 4242 → check confirmation, refunds, double-booking.
-2. Then go live (DEPLOY.md step 10): Stripe business verification with your ABN,
-   live keys + live webhooks, legal page review.
+## Setup in place
+- GitHub `main` → Vercel auto-deploys; CI runs tests/build.
+- Supabase `officebnb-prod` (Sydney, ref `gmkhxdfurmefoikexnpo`): migrations, storage bucket,
+  4 Edge Functions (JWT verification off — functions check login themselves), secrets.
+- Stripe sandbox: 2 webhook endpoints, Connect, Accounts v1 support on.
+
+## Small fixes still to do
+- Vercel env `VITE_BUSINESS_LEGAL_NAME` contains "e.g. " — remove it (footer shows it).
+- Google sign-in not enabled on the new Supabase project (see chat notes / DEPLOY.md).
+- Edge Functions in Supabase were deployed by hand from bundles; for future changes use
+  `npx supabase functions deploy` from this folder (or ask Claude to redeploy).
+
+## Going live (DEPLOY.md step 10)
+1. Stripe: activate the account (sole trader + ABN), turn on Accounts v1 support in LIVE mode,
+   create the two live webhooks, put live keys/secrets into Supabase + `pk_live` into Vercel.
+2. Lawyer review of /terms, /privacy, /cancellation-policy; ASIC business name; accountant re GST/SERR.
+3. Delete the TEST listing/bookings and test accounts; one real small booking + refund.
