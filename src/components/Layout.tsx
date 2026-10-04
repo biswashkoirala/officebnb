@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
-import DemoBadge from './DemoBadge';
 import LoginModal from './LoginModal';
 import CompleteProfileModal from './CompleteProfileModal';
 
@@ -13,7 +12,6 @@ export default function Layout() {
         <Outlet />
       </main>
       <Footer />
-      <DemoBadge />
       <LoginModal />
       <CompleteProfileModal />
     </div>

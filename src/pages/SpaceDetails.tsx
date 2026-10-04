@@ -40,7 +40,7 @@ export default function SpaceDetails() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-24 text-center">
         <h1 className="font-display text-2xl font-bold text-ink-950">Space not found</h1>
-        <p className="mt-2 text-ink-500">This listing may have been removed.</p>
+        <p className="mt-2 text-ink-500">This listing may have been removed by its host.</p>
         <Button className="mt-6" onClick={() => navigate('/explore')}>
           Back to Explore
         </Button>
@@ -66,10 +66,16 @@ export default function SpaceDetails() {
             <span className="flex items-center gap-1">
               <MapPin size={14} /> {listing.location}
             </span>
-            <span className="flex items-center gap-1">
-              <Star size={14} className="fill-amber-glow text-amber-glow" />
-              {listing.rating} · {listing.reviewCount} reviews
-            </span>
+            {listing.rating == null ? (
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                New listing
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <Star size={14} className="fill-amber-glow text-amber-glow" />
+                {listing.rating} · {listing.reviewCount} reviews
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <Users size={14} /> Up to {listing.capacity} people
             </span>
@@ -148,15 +154,22 @@ export default function SpaceDetails() {
           <section>
             <h2 className="font-display text-xl font-bold text-ink-950">Hosted by</h2>
             <div className="mt-4 flex items-center gap-4 rounded-xl border border-ink-100 bg-white p-4">
-              <ListingImage
-                src={listing.host.avatar}
-                alt={listing.host.businessName}
-                className="h-14 w-14 rounded-full object-cover"
-              />
+              {listing.host.avatar ? (
+                <ListingImage
+                  src={listing.host.avatar}
+                  alt={listing.host.businessName}
+                  className="h-14 w-14 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-50 font-display text-lg font-bold text-brand-700">
+                  {listing.host.businessName.slice(0, 1).toUpperCase()}
+                </span>
+              )}
               <div>
                 <p className="font-display font-semibold text-ink-950">{listing.host.businessName}</p>
                 <p className="text-sm text-ink-500">
-                  Hosted by {listing.host.name} · Responds {listing.host.responseTime}
+                  Hosted by {listing.host.name}
+                  {listing.host.responseTime ? ` · Responds ${listing.host.responseTime}` : ''}
                 </p>
                 <p className="text-xs text-ink-400">Member since {listing.host.joined}</p>
               </div>

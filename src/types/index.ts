@@ -28,7 +28,8 @@ export interface Listing {
   description: string;
   price: number;
   capacity: number;
-  rating: number;
+  /** null until the space has real reviews — shown as "New". */
+  rating: number | null;
   reviewCount: number;
   amenities: string[];
   availableHours: AvailableHours;
@@ -36,6 +37,8 @@ export interface Listing {
   host: Host;
   bookingsCount: number;
   featured?: boolean;
+  archived: boolean;
+  ownerId: string | null;
 }
 
 export interface SearchParams {
@@ -56,6 +59,8 @@ export interface FilterState {
   weekendAvailability: boolean;
 }
 
+export type BookingStatus = 'pending' | 'confirmed' | 'failed' | 'expired' | 'cancelled' | 'disputed';
+
 export interface Booking {
   id: string;
   listingId: string;
@@ -64,11 +69,20 @@ export interface Booking {
   date: string;
   startTime: string;
   endTime: string;
+  /** Start as an absolute instant (Sydney time converted to UTC). */
+  startsAt: string | null;
   guests: number;
   hours: number;
   subtotal: number;
   serviceFee: number;
   total: number;
+  /** What the space owner receives for this booking. */
+  hostPayout: number;
+  refundAmount: number;
+  status: BookingStatus;
   reference: string;
   hostName: string;
+  renterName: string | null;
+  cancelledBy: 'renter' | 'owner' | 'admin' | 'system' | null;
+  cancellationReason: string | null;
 }

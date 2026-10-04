@@ -33,8 +33,8 @@ export default function CompleteProfileModal() {
       const newProfile = await createProfile({
         id: user.id,
         role,
-        name,
-        businessName: role === 'owner' ? businessName : null,
+        name: name.trim(),
+        businessName: role === 'owner' ? businessName.trim() : null,
       });
       applyProfile(newProfile);
       if (role === 'owner') navigate('/dashboard');
@@ -68,6 +68,7 @@ export default function CompleteProfileModal() {
           placeholder="Alex Renter"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          maxLength={120}
           required
         />
         <div>
@@ -103,6 +104,7 @@ export default function CompleteProfileModal() {
             placeholder="Sarah's Workspace"
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
+            maxLength={120}
             required
           />
         )}

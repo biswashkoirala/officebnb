@@ -145,9 +145,9 @@ export default function Home() {
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <h2 className="font-display text-3xl font-bold text-ink-950 sm:text-4xl">
-                Popular spaces near you
+                Spaces in Sydney
               </h2>
-              <p className="mt-2 text-ink-500">Handpicked rooms ready for your next booking.</p>
+              <p className="mt-2 text-ink-500">Rooms ready for your next booking.</p>
             </div>
             <Button variant="outline" onClick={() => navigate('/explore')}>
               View all spaces <ArrowRight size={16} />
@@ -158,7 +158,7 @@ export default function Home() {
             <p className="mt-10 text-sm text-ink-400">Loading spaces…</p>
           ) : popular.length === 0 ? (
             <p className="mt-10 text-sm text-ink-400">
-              No spaces yet — seed your Supabase database to see listings here.
+              New spaces are being added — check back soon, or list your own.
             </p>
           ) : (
             <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

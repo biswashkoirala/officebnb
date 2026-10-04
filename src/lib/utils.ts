@@ -1,3 +1,25 @@
+// Pricing and time rules come from the same files the payment server uses,
+// so the price and rules shown here always match what is charged.
+export {
+  CURRENCY,
+  SERVICE_FEE_RATE,
+  HOST_COMMISSION_RATE,
+  hoursBetween,
+  priceBreakdown,
+  isWithinAvailableHours,
+} from '../../supabase/functions/_shared/pricing.ts';
+export {
+  TIME_ZONE,
+  FREE_CANCELLATION_HOURS,
+  HOLD_MINUTES,
+  MIN_LEAD_MINUTES,
+  checkBookingTime,
+  hoursUntil,
+  renterRefundAmount,
+  sydneyToUtc,
+  todayInSydney,
+} from '../../supabase/functions/_shared/time.ts';
+
 export function formatTime(time: string): string {
   const [hStr, mStr] = time.split(':');
   let h = parseInt(hStr, 10);
@@ -8,36 +30,34 @@ export function formatTime(time: string): string {
   return `${h}:${m} ${period}`;
 }
 
-export function hoursBetween(start: string, end: string): number {
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  const startMinutes = sh * 60 + sm;
-  const endMinutes = eh * 60 + em;
-  const diff = (endMinutes - startMinutes) / 60;
-  return diff > 0 ? diff : 0;
-}
-
-export const SERVICE_FEE_RATE = 0.1;
-
-export function priceBreakdown(pricePerHour: number, hours: number) {
-  const subtotal = Math.round(pricePerHour * hours * 100) / 100;
-  const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE * 100) / 100;
-  const total = Math.round((subtotal + serviceFee) * 100) / 100;
-  return { subtotal, serviceFee, total };
-}
-
 export function formatCurrency(value: number): string {
   const hasCents = Math.round(value * 100) % 100 !== 0;
   return value.toLocaleString('en-AU', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'AUD',
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: hasCents ? 2 : 0,
     maximumFractionDigits: 2,
   });
 }
 
-export function generateBookingReference(): string {
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `OFF-2026-${rand}`;
+/** "2026-10-03" → "Sat 3 Oct 2026" (the date is a calendar date, no timezone maths). */
+export function formatDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-AU', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
+
+/** Half-hour slots offered for booking: 6:00 AM … 11:30 PM. */
+export const TIME_SLOTS = Array.from({ length: 36 }, (_, i) => {
+  const totalMinutes = 6 * 60 + i * 30;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return { value, label: formatTime(value) };
+});

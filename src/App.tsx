@@ -10,6 +10,8 @@ import BookingConfirmation from './pages/BookingConfirmation';
 import Dashboard from './pages/Dashboard';
 import MyBookings from './pages/MyBookings';
 import ListYourSpace from './pages/ListYourSpace';
+import NotFound from './pages/NotFound';
+import { CancellationPolicyPage, ContactPage, PrivacyPage, TermsPage } from './pages/Legal';
 
 export default function App() {
   return (
@@ -26,7 +28,11 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/my-bookings" element={<MyBookings />} />
             <Route path="/list-your-space" element={<ListYourSpace />} />
-            <Route path="*" element={<Home />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/cancellation-policy" element={<CancellationPolicyPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </AppProvider>

@@ -1,120 +1,14 @@
--- Officebnb — Supabase schema + seed data
--- Run this whole file once in the Supabase SQL editor (Project → SQL Editor → New query).
--- Safe to re-run: it drops and recreates the two tables each time.
+-- LOCAL DEVELOPMENT ONLY. Never run this against your production project.
+--
+-- These 12 demo Sydney listings have invented hosts, ratings and review
+-- counts. Showing them to real customers would be misleading (and, in
+-- Australia, risks breaching the Australian Consumer Law on fake reviews).
+-- The Supabase CLI only loads this file into a *local* database on
+-- `supabase db reset`; `supabase db push` never runs it.
+--
+-- The listings have no owner_id, so they can be browsed but not booked
+-- (there's no Stripe account to pay out to).
 
-drop table if exists public.bookings;
-drop table if exists public.listings;
-drop table if exists public.profiles;
-
--- ---------------------------------------------------------------------------
--- Profiles: one row per signed-up user, created once at signup. Holds the
--- role (renter/owner) and, for owners, their business name. There is no
--- update policy below, so once written these fields can never be changed by
--- the user — a renter can't self-promote to owner after the fact, and this
--- is what the "Owners insert own listings" policy actually checks.
--- ---------------------------------------------------------------------------
-create table public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('renter', 'owner')),
-  name text not null,
-  business_name text,
-  created_at timestamptz not null default now()
-);
-
--- Case-insensitive uniqueness so a new signup can't claim a business name
--- another account already owns.
-create unique index profiles_business_name_key on public.profiles (lower(business_name))
-  where business_name is not null;
-
--- ---------------------------------------------------------------------------
--- Listings: every space available on the marketplace, including ones created
--- through the "List your space" form.
--- ---------------------------------------------------------------------------
-create table public.listings (
-  id text primary key,
-  name text not null,
-  location text not null,
-  suburb text not null,
-  type text not null,
-  description text not null,
-  price numeric not null,
-  capacity integer not null,
-  rating numeric not null default 5,
-  review_count integer not null default 0,
-  amenities text[] not null default '{}',
-  available_hours jsonb not null,
-  images text[] not null default '{}',
-  host jsonb not null,
-  bookings_count integer not null default 0,
-  featured boolean not null default false,
-  owner_id uuid references auth.users(id) on delete set null,
-  created_at timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------------
--- Bookings: every reservation made through the booking flow.
--- ---------------------------------------------------------------------------
-create table public.bookings (
-  id uuid primary key default gen_random_uuid(),
-  listing_id text not null references public.listings(id) on delete cascade,
-  listing_name text not null,
-  location text not null,
-  date text not null,
-  start_time text not null,
-  end_time text not null,
-  guests integer not null,
-  hours numeric not null,
-  subtotal numeric not null,
-  service_fee numeric not null,
-  total numeric not null,
-  reference text not null,
-  host_name text not null,
-  user_id uuid references auth.users(id) on delete set null,
-  created_at timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------------
--- Row Level Security. Listings stay publicly browsable (it's a marketplace),
--- but creating a listing or a booking requires a real signed-in Supabase Auth
--- user, and each row is owned by that user (owner_id / user_id). Bookings are
--- only readable by the renter who made them or the owner of the listing.
--- Creating a listing additionally requires the signed-in user's profile to
--- have role = 'owner' — enforced here in the database, not just in the UI.
--- ---------------------------------------------------------------------------
-alter table public.profiles enable row level security;
-alter table public.listings enable row level security;
-alter table public.bookings enable row level security;
-
-grant usage on schema public to anon, authenticated;
-grant select, insert on public.profiles to authenticated;
-grant select on public.listings to anon, authenticated;
-grant insert on public.listings to authenticated;
-grant select, insert on public.bookings to authenticated;
-
-create policy "Users read own profile" on public.profiles
-  for select using (auth.uid() = id);
-create policy "Users insert own profile" on public.profiles
-  for insert with check (auth.uid() = id);
-
-create policy "Public read listings" on public.listings
-  for select using (true);
-create policy "Owners insert own listings" on public.listings
-  for insert with check (
-    auth.uid() = owner_id
-    and exists (select 1 from public.profiles where id = auth.uid() and role = 'owner')
-  );
-
-create policy "Users read own bookings" on public.bookings
-  for select using (
-    auth.uid() = user_id
-    or listing_id in (select id from public.listings where owner_id = auth.uid())
-  );
-create policy "Users insert own bookings" on public.bookings
-  for insert with check (auth.uid() = user_id);
-
--- ---------------------------------------------------------------------------
--- Seed data: the 12 demo Sydney listings.
--- ---------------------------------------------------------------------------
 insert into public.listings
   (id, name, location, suburb, type, description, price, capacity, rating, review_count, amenities, available_hours, images, host, bookings_count, featured)
 values
@@ -130,14 +24,3 @@ values
 ('ultimo-training-room', 'Ultimo Training Room', 'Ultimo', 'Ultimo', 'Training Room', 'A modern training room near Ultimo, ideal for weekend certification courses, tutoring sessions, and small conferences.', 35, 12, 4.6, 8, ARRAY['Wi-Fi', 'Projector', 'Whiteboard', 'Air conditioning', 'Power outlets']::text[], '{"weekdays":{"start":"18:00","end":"21:00"},"weekends":{"start":"09:00","end":"19:00"}}'::jsonb, ARRAY['https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80', 'https://images.unsplash.com/photo-1571624436279-b272aff752b5?auto=format&fit=crop&w=1200&q=80', 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80']::text[], '{"name":"Tom Reilly","businessName":"Ultimo Education Hub","avatar":"https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1200&q=80","responseTime":"within 3 hours","joined":"2023"}'::jsonb, 6, false),
 ('private-office-cbd-two', 'CBD Quiet Office', 'Sydney CBD', 'Sydney CBD', 'Private Office', 'A calm, quiet private office in the CBD, ideal for focused solo work, client calls, and small consultations on weekends.', 24, 3, 4.7, 17, ARRAY['Wi-Fi', 'Air conditioning', 'Power outlets', 'Kitchen access']::text[], '{"weekdays":{"start":"18:00","end":"22:00"},"weekends":{"start":"09:00","end":"20:00"}}'::jsonb, ARRAY['https://images.unsplash.com/photo-1524749292158-7540c2494485?auto=format&fit=crop&w=1200&q=80', 'https://images.unsplash.com/photo-1497366412874-3415097a27e7?auto=format&fit=crop&w=1200&q=80', 'https://images.unsplash.com/photo-1541558869434-2840d308329a?auto=format&fit=crop&w=1200&q=80']::text[], '{"name":"Sarah Johnson","businessName":"Sarah''s Workspace","avatar":"https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=80","responseTime":"within an hour","joined":"2023"}'::jsonb, 11, false),
 ('coworking-cbd-collective', 'CBD Collective Desk Space', 'Sydney CBD', 'Sydney CBD', 'Coworking Space', 'A flexible open-plan coworking floor in the CBD, great for small teams and workshops that need extra elbow room after hours.', 26, 14, 4.8, 25, ARRAY['Wi-Fi', 'Whiteboard', 'Video conferencing', 'Kitchen', 'Air conditioning', 'Power outlets']::text[], '{"weekdays":{"start":"18:00","end":"22:00"},"weekends":{"start":"08:00","end":"20:00"}}'::jsonb, ARRAY['https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=1200&q=80', 'https://images.unsplash.com/photo-1524749292158-7540c2494485?auto=format&fit=crop&w=1200&q=80', 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80']::text[], '{"name":"Alicia Wong","businessName":"Collective Sydney","avatar":"https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80","responseTime":"within an hour","joined":"2021"}'::jsonb, 20, false);
-
--- ---------------------------------------------------------------------------
--- Seed data: two example bookings on Sarah's spaces, so the Owner Dashboard
--- has "Upcoming bookings" to show immediately. Real bookings made through the
--- app get inserted alongside these.
--- ---------------------------------------------------------------------------
-insert into public.bookings
-  (listing_id, listing_name, location, date, start_time, end_time, guests, hours, subtotal, service_fee, total, reference, host_name)
-values
-('modern-meeting-room-cbd', 'Modern Meeting Room', 'Sydney CBD', 'Saturday, 22 August', '18:00', '21:00', 3, 3, 75, 7.5, 82.5, 'OFF-2026-1001', 'Sarah''s Workspace'),
-('executive-boardroom-barangaroo', 'Executive Boardroom', 'Barangaroo', 'Sunday, 23 August', '10:00', '13:00', 8, 3, 135, 0, 135, 'OFF-2026-1002', 'Sarah''s Workspace');

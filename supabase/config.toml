@@ -1,0 +1,14 @@
+# Supabase CLI configuration. Only settings that differ from the CLI's
+# defaults are listed here.
+project_id = "officebnb"
+
+[db.seed]
+# supabase/seed.sql holds invented demo listings. It is only ever loaded into
+# a *local* database by `supabase db reset` — never by `supabase db push`.
+enabled = true
+sql_paths = ["./seed.sql"]
+
+# Stripe calls the webhook without a Supabase login; the Stripe signature
+# check inside the function is what authenticates it.
+[functions.stripe-webhook]
+verify_jwt = false

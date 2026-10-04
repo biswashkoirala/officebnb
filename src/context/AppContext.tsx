@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { fetchProfile, type Profile } from '../lib/api';
+import { todayInSydney } from '../lib/utils';
 import type { Booking, SearchParams } from '../types';
 
 interface BookingDraft {
@@ -29,7 +30,10 @@ interface AppContextValue {
   displayName: string | null;
   businessName: string | null;
   needsProfileSetup: boolean;
+  profile: Profile | null;
   applyProfile: (profile: Profile) => void;
+  /** Re-reads the profile (e.g. after Stripe payout onboarding). */
+  refreshProfile: () => Promise<void>;
   logout: () => void;
   loginModalOpen: boolean;
   openLoginModal: () => void;
@@ -40,7 +44,7 @@ const FAVORITES_KEY = 'officebnb:favorites';
 
 const defaultSearchParams: SearchParams = {
   location: 'Sydney CBD',
-  date: 'Saturday, 22 August',
+  date: todayInSydney(),
   startTime: '18:00',
   endTime: '21:00',
   guests: 3,
@@ -70,7 +74,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(favorites)));
     } catch {
-      // ignore persistence errors in demo mode
+      // localStorage can be unavailable (private browsing, quota) — favorites just won't persist
     }
   }, [favorites]);
 
@@ -133,7 +137,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       displayName: profile?.name ?? null,
       businessName: profile?.businessName ?? null,
       needsProfileSetup: !!user && !authLoading && !profileLoading && !profile,
+      profile,
       applyProfile: setProfile,
+      refreshProfile: async () => {
+        if (!user) return;
+        try {
+          setProfile(await fetchProfile(user.id));
+        } catch (err) {
+          console.error('Failed to refresh profile', err);
+        }
+      },
       logout: () => {
         supabase.auth.signOut();
       },

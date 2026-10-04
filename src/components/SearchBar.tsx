@@ -60,9 +60,10 @@ export default function SearchBar({ initial, onSearch, variant = 'hero' }: Searc
           <Calendar size={12} /> Date
         </label>
         <input
+          type="date"
+          min={new Date().toISOString().slice(0, 10)}
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          placeholder="Saturday, 22 August"
           className="w-full rounded-lg border border-transparent bg-ink-50 px-3 py-2.5 text-sm font-medium text-ink-900 outline-none transition-colors focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
         />
       </div>

@@ -44,10 +44,16 @@ export default function ListingCard({ listing }: ListingCardProps) {
           <h3 className="font-display text-[15px] font-semibold leading-snug text-ink-950">
             {listing.name}
           </h3>
-          <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-ink-800">
-            <Star size={13} className="fill-amber-glow text-amber-glow" />
-            {listing.rating}
-          </span>
+          {listing.rating == null ? (
+            <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+              New
+            </span>
+          ) : (
+            <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-ink-800">
+              <Star size={13} className="fill-amber-glow text-amber-glow" />
+              {listing.rating}
+            </span>
+          )}
         </div>
         <p className="mt-0.5 text-sm text-ink-500">{listing.location}</p>
 

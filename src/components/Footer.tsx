@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Building2 } from 'lucide-react';
+import { SITE } from '../lib/site';
 
 export default function Footer() {
   return (
@@ -37,14 +38,20 @@ export default function Footer() {
             <h4 className="font-display text-sm font-semibold text-ink-900">Officebnb</h4>
             <ul className="mt-3 space-y-2 text-sm text-ink-500">
               <li><Link to="/#why" className="hover:text-ink-900">Why Officebnb</Link></li>
-              <li><a href="#" className="hover:text-ink-900" onClick={(e) => e.preventDefault()}>Careers</a></li>
-              <li><a href="#" className="hover:text-ink-900" onClick={(e) => e.preventDefault()}>Contact</a></li>
+              <li><Link to="/contact" className="hover:text-ink-900">Contact</Link></li>
+              <li><Link to="/cancellation-policy" className="hover:text-ink-900">Cancellation policy</Link></li>
             </ul>
           </div>
         </div>
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-ink-100 pt-6 text-xs text-ink-400 sm:flex-row">
-          <p>© 2026 Officebnb. A hackathon demo project — not a real company.</p>
-          <p>Built for demo purposes only.</p>
+          <p>
+            © {new Date().getFullYear()} {SITE.legalName} · ABN {SITE.abn}
+          </p>
+          <div className="flex gap-4">
+            <Link to="/terms" className="hover:text-ink-700">Terms</Link>
+            <Link to="/privacy" className="hover:text-ink-700">Privacy</Link>
+            <Link to="/cancellation-policy" className="hover:text-ink-700">Cancellations</Link>
+          </div>
         </div>
       </div>
     </footer>

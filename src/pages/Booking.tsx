@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CreditCard, Lock, ShieldCheck } from 'lucide-react';
-import { createBooking, fetchListingById } from '../lib/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import { ShieldCheck } from 'lucide-react';
+import { createPaymentIntent, fetchListingById } from '../lib/api';
+import { getStripe } from '../lib/stripe';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatTime, generateBookingReference, hoursBetween, priceBreakdown } from '../lib/utils';
+import { FREE_CANCELLATION_HOURS, formatCurrency, formatDate, formatTime, hoursBetween, priceBreakdown } from '../lib/utils';
 import Button from '../components/Button';
-import Input from '../components/Input';
 import type { Listing } from '../types';
 
 export default function Booking() {
   const navigate = useNavigate();
-  const { bookingDraft, setLastBooking, user, isLoggedIn, openLoginModal } = useApp();
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
+  const { bookingDraft, user, isLoggedIn, openLoginModal } = useApp();
   const [listing, setListing] = useState<Listing | null | undefined>(undefined);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [holdMinutes, setHoldMinutes] = useState(15);
+  const [intentError, setIntentError] = useState('');
 
   useEffect(() => {
     if (!bookingDraft) return;
@@ -24,6 +27,33 @@ export default function Booking() {
         setListing(null);
       });
   }, [bookingDraft]);
+
+  useEffect(() => {
+    if (!bookingDraft || !isLoggedIn || !user || clientSecret) return;
+    let cancelled = false;
+    setIntentError('');
+    createPaymentIntent({
+      listingId: bookingDraft.listingId,
+      date: bookingDraft.date,
+      startTime: bookingDraft.startTime,
+      endTime: bookingDraft.endTime,
+      guests: bookingDraft.guests,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setClientSecret(result.clientSecret);
+        setBookingId(result.bookingId);
+        setHoldMinutes(result.holdMinutes);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Failed to start payment', err);
+        setIntentError(err instanceof Error ? err.message : 'Something went wrong starting your payment.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingDraft, isLoggedIn, user, clientSecret]);
 
   const hours = useMemo(
     () => (bookingDraft ? hoursBetween(bookingDraft.startTime, bookingDraft.endTime) : 0),
@@ -66,72 +96,31 @@ export default function Booking() {
     );
   }
 
-  const handleConfirm = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setProcessing(true);
-    setError('');
-    try {
-      const booking = await createBooking({
-        listingId: listing.id,
-        listingName: listing.name,
-        location: listing.location,
-        date: bookingDraft.date,
-        startTime: bookingDraft.startTime,
-        endTime: bookingDraft.endTime,
-        guests: bookingDraft.guests,
-        hours,
-        subtotal,
-        serviceFee,
-        total,
-        reference: generateBookingReference(),
-        hostName: listing.host.businessName,
-        userId: user.id,
-      });
-      setLastBooking(booking);
-      navigate('/confirmation');
-    } catch (err) {
-      console.error('Failed to create booking', err);
-      setError('Something went wrong confirming your booking. Please try again.');
-      setProcessing(false);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
       <h1 className="font-display text-3xl font-bold text-ink-950">Confirm your booking</h1>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
-        <form onSubmit={handleConfirm} className="space-y-6">
-          <div className="rounded-2xl border border-ink-100 bg-white p-6">
-            <h2 className="font-display text-lg font-bold text-ink-950">Payment details</h2>
-            <div className="mt-1 flex items-center gap-1.5 rounded-lg bg-amber-glow/10 px-3 py-2 text-xs font-medium text-amber-glow">
-              <ShieldCheck size={14} />
-              This is a demo payment screen. No real payment will be processed.
+        <div className="space-y-6">
+          {intentError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+              <p className="text-sm font-medium text-red-700">{intentError}</p>
+              <Button className="mt-4" variant="outline" onClick={() => navigate(`/space/${listing.id}`)}>
+                Back to space
+              </Button>
             </div>
+          )}
 
-            <div className="mt-5 space-y-4">
-              <Input
-                label="Card number"
-                icon={<CreditCard size={16} />}
-                placeholder="4242 4242 4242 4242"
-                defaultValue="4242 4242 4242 4242"
-                required
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Expiry" placeholder="MM / YY" defaultValue="08 / 29" required />
-                <Input label="CVC" icon={<Lock size={16} />} placeholder="123" defaultValue="123" required />
-              </div>
-              <Input label="Name on card" placeholder="Alex Renter" defaultValue="Alex Renter" required />
+          {!intentError && clientSecret && bookingId ? (
+            <Elements stripe={getStripe()} options={{ clientSecret }}>
+              <CheckoutForm bookingId={bookingId} total={total} holdMinutes={holdMinutes} />
+            </Elements>
+          ) : !intentError ? (
+            <div className="rounded-2xl border border-ink-100 bg-white p-6">
+              <p className="text-sm text-ink-400">Preparing your payment…</p>
             </div>
-          </div>
-
-          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-
-          <Button type="submit" size="lg" fullWidth disabled={processing}>
-            {processing ? 'Processing…' : `Confirm & Pay ${formatCurrency(total)}`}
-          </Button>
-        </form>
+          ) : null}
+        </div>
 
         <aside className="h-fit rounded-2xl border border-ink-100 bg-white p-6">
           <h2 className="font-display text-lg font-bold text-ink-950">{listing.name}</h2>
@@ -140,7 +129,7 @@ export default function Booking() {
           <dl className="mt-5 space-y-3 border-t border-ink-100 pt-5 text-sm">
             <div className="flex justify-between">
               <dt className="text-ink-500">Date</dt>
-              <dd className="font-medium text-ink-900">{bookingDraft.date}</dd>
+              <dd className="font-medium text-ink-900">{formatDate(bookingDraft.date)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-ink-500">Time</dt>
@@ -173,5 +162,63 @@ export default function Booking() {
         </aside>
       </div>
     </div>
+  );
+}
+
+function CheckoutForm({ bookingId, total, holdMinutes }: { bookingId: string; total: number; holdMinutes: number }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError('');
+    const { error: confirmError } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/confirmation?bookingId=${bookingId}`,
+      },
+    });
+    if (confirmError) {
+      setError(confirmError.message ?? 'Payment failed. Please try again.');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="rounded-2xl border border-ink-100 bg-white p-6">
+        <h2 className="font-display text-lg font-bold text-ink-950">Payment details</h2>
+        <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-ink-400">
+          <ShieldCheck size={14} />
+          Payments are processed securely by Stripe.
+        </div>
+        <div className="mt-5">
+          <PaymentElement />
+        </div>
+      </div>
+
+      {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+
+      <p className="text-xs leading-relaxed text-ink-500">
+        We're holding this time for you for {holdMinutes} minutes. Free cancellation up to{' '}
+        {FREE_CANCELLATION_HOURS} hours before your start time. By paying you agree to the{' '}
+        <Link to="/terms" className="font-medium text-brand-600 underline" target="_blank">
+          Terms
+        </Link>{' '}
+        and{' '}
+        <Link to="/cancellation-policy" className="font-medium text-brand-600 underline" target="_blank">
+          Cancellation policy
+        </Link>
+        . Prices are in Australian dollars.
+      </p>
+
+      <Button type="submit" size="lg" fullWidth disabled={!stripe || submitting}>
+        {submitting ? 'Processing…' : `Confirm & Pay ${formatCurrency(total)}`}
+      </Button>
+    </form>
   );
 }

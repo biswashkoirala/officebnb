@@ -1,11 +1,21 @@
 import { supabase } from './supabaseClient';
-import type { AvailableHours, Booking, Host, Listing, SpaceType } from '../types';
+import type { AvailableHours, Booking, BookingStatus, Host, Listing, SpaceType } from '../types';
+
+// ---------------------------------------------------------------------------
+// Profiles
+// ---------------------------------------------------------------------------
 
 export interface Profile {
   id: string;
   role: 'renter' | 'owner';
   name: string;
   businessName: string | null;
+  /** Owner has started Stripe onboarding. */
+  hasStripeAccount: boolean;
+  /** Stripe will accept payments for this owner — required to publish. */
+  stripeChargesEnabled: boolean;
+  stripePayoutsEnabled: boolean;
+  stripeDetailsSubmitted: boolean;
 }
 
 interface ProfileRow {
@@ -13,10 +23,23 @@ interface ProfileRow {
   role: 'renter' | 'owner';
   name: string;
   business_name: string | null;
+  stripe_account_id?: string | null;
+  stripe_charges_enabled?: boolean;
+  stripe_payouts_enabled?: boolean;
+  stripe_details_submitted?: boolean;
 }
 
 function mapProfile(row: ProfileRow): Profile {
-  return { id: row.id, role: row.role, name: row.name, businessName: row.business_name };
+  return {
+    id: row.id,
+    role: row.role,
+    name: row.name,
+    businessName: row.business_name,
+    hasStripeAccount: !!row.stripe_account_id,
+    stripeChargesEnabled: !!row.stripe_charges_enabled,
+    stripePayoutsEnabled: !!row.stripe_payouts_enabled,
+    stripeDetailsSubmitted: !!row.stripe_details_submitted,
+  };
 }
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -39,6 +62,10 @@ export async function createProfile(input: NewProfileInput): Promise<Profile> {
   return mapProfile(data as ProfileRow);
 }
 
+// ---------------------------------------------------------------------------
+// Listings
+// ---------------------------------------------------------------------------
+
 interface ListingRow {
   id: string;
   name: string;
@@ -48,7 +75,7 @@ interface ListingRow {
   description: string;
   price: number;
   capacity: number;
-  rating: number;
+  rating: number | null;
   review_count: number;
   amenities: string[];
   available_hours: AvailableHours;
@@ -56,26 +83,8 @@ interface ListingRow {
   host: Host;
   bookings_count: number;
   featured: boolean;
+  archived: boolean;
   owner_id: string | null;
-}
-
-interface BookingRow {
-  id: string;
-  listing_id: string;
-  listing_name: string;
-  location: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-  guests: number;
-  hours: number;
-  subtotal: number;
-  service_fee: number;
-  total: number;
-  reference: string;
-  host_name: string;
-  created_at: string;
-  user_id: string | null;
 }
 
 function mapListing(row: ListingRow): Listing {
@@ -88,7 +97,7 @@ function mapListing(row: ListingRow): Listing {
     description: row.description,
     price: Number(row.price),
     capacity: row.capacity,
-    rating: Number(row.rating),
+    rating: row.rating == null ? null : Number(row.rating),
     reviewCount: row.review_count,
     amenities: row.amenities,
     availableHours: row.available_hours,
@@ -96,32 +105,17 @@ function mapListing(row: ListingRow): Listing {
     host: row.host,
     bookingsCount: row.bookings_count,
     featured: row.featured,
+    archived: !!row.archived,
+    ownerId: row.owner_id,
   };
 }
 
-function mapBooking(row: BookingRow): Booking {
-  return {
-    id: row.id,
-    listingId: row.listing_id,
-    listingName: row.listing_name,
-    location: row.location,
-    date: row.date,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    guests: row.guests,
-    hours: Number(row.hours),
-    subtotal: Number(row.subtotal),
-    serviceFee: Number(row.service_fee),
-    total: Number(row.total),
-    reference: row.reference,
-    hostName: row.host_name,
-  };
-}
-
+/** Public marketplace listings (never archived ones, even the viewer's own). */
 export async function fetchListings(): Promise<Listing[]> {
   const { data, error } = await supabase
     .from('listings')
     .select('*')
+    .eq('archived', false)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data as ListingRow[]).map(mapListing);
@@ -133,7 +127,18 @@ export async function fetchListingById(id: string): Promise<Listing | null> {
   return data ? mapListing(data as ListingRow) : null;
 }
 
-export interface NewListingInput {
+export async function fetchListingsByOwnerId(ownerId: string): Promise<Listing[]> {
+  const { data, error } = await supabase
+    .from('listings')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as ListingRow[]).map(mapListing);
+}
+
+/** The fields an owner controls. Host card, rating etc. are set by the server. */
+export interface ListingInput {
   name: string;
   location: string;
   type: SpaceType;
@@ -143,8 +148,6 @@ export interface NewListingInput {
   amenities: string[];
   availableHours: AvailableHours;
   images: string[];
-  ownerId: string;
-  host: Host;
 }
 
 function slugify(name: string): string {
@@ -152,83 +155,113 @@ function slugify(name: string): string {
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  return `${base || 'space'}-${Math.random().toString(36).slice(2, 7)}`;
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 60);
+  return `${base || 'space'}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export async function createListing(input: NewListingInput): Promise<Listing> {
-  const row = {
-    id: slugify(input.name),
+function toListingColumns(input: ListingInput) {
+  return {
     name: input.name,
     location: input.location,
-    suburb: input.location,
     type: input.type,
     description: input.description,
     price: input.price,
     capacity: input.capacity,
-    rating: 5,
-    review_count: 0,
     amenities: input.amenities,
     available_hours: input.availableHours,
-    images: input.images.length
-      ? input.images
-      : ['https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80'],
-    host: input.host,
-    bookings_count: 0,
-    featured: false,
-    owner_id: input.ownerId,
+    images: input.images,
   };
+}
+
+export async function createListing(input: ListingInput, ownerId: string): Promise<Listing> {
+  const row = { id: slugify(input.name), owner_id: ownerId, ...toListingColumns(input) };
   const { data, error } = await supabase.from('listings').insert(row).select().single();
   if (error) throw error;
   return mapListing(data as ListingRow);
 }
 
-export interface NewBookingInput {
-  listingId: string;
-  listingName: string;
+export async function updateListing(id: string, input: ListingInput): Promise<Listing> {
+  const { data, error } = await supabase.from('listings').update(toListingColumns(input)).eq('id', id).select().single();
+  if (error) throw error;
+  return mapListing(data as ListingRow);
+}
+
+/** Hides a listing from the marketplace (or restores it). Bookings are kept. */
+export async function setListingArchived(id: string, archived: boolean): Promise<void> {
+  const { error } = await supabase.from('listings').update({ archived }).eq('id', id);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Bookings
+// ---------------------------------------------------------------------------
+
+interface BookingRow {
+  id: string;
+  listing_id: string;
+  listing_name: string;
   location: string;
-  date: string;
-  startTime: string;
-  endTime: string;
+  booking_date: string;
+  start_time: string;
+  end_time: string;
+  starts_at: string | null;
   guests: number;
   hours: number;
   subtotal: number;
-  serviceFee: number;
+  service_fee: number;
   total: number;
+  host_payout: number;
+  refund_amount: number;
+  status: BookingStatus;
   reference: string;
-  hostName: string;
-  userId: string;
+  host_name: string;
+  renter_name: string | null;
+  cancelled_by: Booking['cancelledBy'];
+  cancellation_reason: string | null;
 }
 
-export async function createBooking(input: NewBookingInput): Promise<Booking> {
-  const row = {
-    listing_id: input.listingId,
-    listing_name: input.listingName,
-    location: input.location,
-    date: input.date,
-    start_time: input.startTime,
-    end_time: input.endTime,
-    guests: input.guests,
-    hours: input.hours,
-    subtotal: input.subtotal,
-    service_fee: input.serviceFee,
-    total: input.total,
-    reference: input.reference,
-    host_name: input.hostName,
-    user_id: input.userId,
+function mapBooking(row: BookingRow): Booking {
+  return {
+    id: row.id,
+    listingId: row.listing_id,
+    listingName: row.listing_name,
+    location: row.location,
+    date: row.booking_date,
+    // Postgres returns "18:00:00"; the app works in "18:00".
+    startTime: row.start_time.slice(0, 5),
+    endTime: row.end_time.slice(0, 5),
+    startsAt: row.starts_at,
+    guests: row.guests,
+    hours: Number(row.hours),
+    subtotal: Number(row.subtotal),
+    serviceFee: Number(row.service_fee),
+    total: Number(row.total),
+    hostPayout: Number(row.host_payout),
+    refundAmount: Number(row.refund_amount),
+    status: row.status,
+    reference: row.reference,
+    hostName: row.host_name,
+    renterName: row.renter_name,
+    cancelledBy: row.cancelled_by,
+    cancellationReason: row.cancellation_reason,
   };
-  const { data, error } = await supabase.from('bookings').insert(row).select().single();
-  if (error) throw error;
-  return mapBooking(data as BookingRow);
 }
 
-export async function fetchBookingsForListingIds(listingIds: string[]): Promise<Booking[]> {
-  if (listingIds.length === 0) return [];
+export async function fetchBookingById(id: string): Promise<Booking | null> {
+  const { data, error } = await supabase.from('bookings').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? mapBooking(data as BookingRow) : null;
+}
+
+/** Bookings on spaces the given user owns. */
+export async function fetchBookingsForOwner(ownerId: string): Promise<Booking[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
-    .in('listing_id', listingIds)
-    .order('created_at', { ascending: false });
+    .eq('owner_id', ownerId)
+    .in('status', ['confirmed', 'cancelled', 'disputed'])
+    .order('starts_at', { ascending: true });
   if (error) throw error;
   return (data as BookingRow[]).map(mapBooking);
 }
@@ -238,17 +271,79 @@ export async function fetchBookingsByUserId(userId: string): Promise<Booking[]> 
     .from('bookings')
     .select('*')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .order('starts_at', { ascending: true });
   if (error) throw error;
   return (data as BookingRow[]).map(mapBooking);
 }
 
-export async function fetchListingsByOwnerId(ownerId: string): Promise<Listing[]> {
-  const { data, error } = await supabase
-    .from('listings')
-    .select('*')
-    .eq('owner_id', ownerId)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  return (data as ListingRow[]).map(mapListing);
+// ---------------------------------------------------------------------------
+// Edge Functions (anything involving money runs server-side)
+// ---------------------------------------------------------------------------
+
+async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>(name, { body });
+  if (error) {
+    // FunctionsHttpError's `context` is the raw Response — the friendly
+    // { error: string } message the function returned lives in its body.
+    const context = (error as { context?: Response }).context;
+    let message: string | null = null;
+    if (context) {
+      try {
+        const payload = await context.clone().json();
+        message = typeof payload?.error === 'string' ? payload.error : null;
+      } catch {
+        message = null;
+      }
+    }
+    throw message ? new Error(message) : error;
+  }
+  if (!data) throw new Error(`No response from ${name}`);
+  return data;
+}
+
+export interface CreatePaymentIntentInput {
+  listingId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  guests: number;
+}
+
+export interface CreatePaymentIntentResult {
+  clientSecret: string;
+  bookingId: string;
+  holdMinutes: number;
+}
+
+// Booking rows are never inserted directly by the client — the server
+// re-derives the price, holds the slot, and creates the Stripe
+// PaymentIntent. The booking only becomes `confirmed` once the
+// stripe-webhook function sees the payment succeed.
+export function createPaymentIntent(input: CreatePaymentIntentInput): Promise<CreatePaymentIntentResult> {
+  return invoke('create-payment-intent', { ...input });
+}
+
+export function cancelBooking(bookingId: string, reason?: string): Promise<{ refundAmount: number }> {
+  return invoke('cancel-booking', { bookingId, reason });
+}
+
+export interface PayoutStatus {
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}
+
+/** Stripe-hosted onboarding page where owners add their ABN and bank account. */
+export async function startPayoutOnboarding(): Promise<string> {
+  const { url } = await invoke<{ url: string }>('stripe-connect', { action: 'onboard' });
+  return url;
+}
+
+export function refreshPayoutStatus(): Promise<PayoutStatus> {
+  return invoke('stripe-connect', { action: 'refresh' });
+}
+
+export async function openPayoutDashboard(): Promise<string> {
+  const { url } = await invoke<{ url: string }>('stripe-connect', { action: 'dashboard' });
+  return url;
 }

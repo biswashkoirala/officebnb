@@ -1,15 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Camera, Check, LockKeyhole, PartyPopper } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertCircle, Check, LockKeyhole, PartyPopper } from 'lucide-react';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
-import { createListing } from '../lib/api';
+import PhotoUploader from '../components/PhotoUploader';
+import { createListing, fetchListingById, updateListing, type ListingInput } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import type { SpaceType } from '../types';
-
-const DEFAULT_HOST_AVATAR =
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=80';
 
 const SPACE_TYPES: SpaceType[] = [
   'Meeting Room',
@@ -20,22 +18,27 @@ const SPACE_TYPES: SpaceType[] = [
   'Event Space',
 ];
 
-const AMENITY_OPTIONS = ['Wi-Fi', 'Projector', 'Whiteboard', 'Video conferencing', 'Kitchen', 'Parking', 'Air conditioning'];
-
-const PHOTO_OPTIONS = [
-  'photo-1497366216548-37526070297c',
-  'photo-1524758631624-e2822e304c36',
-  'photo-1568992687947-868a62a9f521',
-  'photo-1560264280-88b68371db39',
-  'photo-1522071820081-009f0129c71c',
-  'photo-1531973576160-7125cd663d86',
-].map((id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=400&q=60`);
+const AMENITY_OPTIONS = [
+  'Wi-Fi',
+  'Projector',
+  'Large display',
+  'Whiteboard',
+  'Video conferencing',
+  'Kitchen',
+  'Kitchen access',
+  'Parking',
+  'Air conditioning',
+  'Power outlets',
+];
 
 const STEPS = ['Details', 'Amenities', 'Availability', 'Photos', 'Review'];
 
 export default function ListYourSpace() {
   const navigate = useNavigate();
-  const { user, isLoggedIn, role, displayName, businessName, openLoginModal } = useApp();
+  const { user, isLoggedIn, role, profile, openLoginModal } = useApp();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'missing'>(editId ? 'loading' : 'idle');
   const [step, setStep] = useState(0);
   const [success, setSuccess] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -54,14 +57,57 @@ export default function ListYourSpace() {
   const [weekendEnd, setWeekendEnd] = useState('20:00');
   const [photos, setPhotos] = useState<string[]>([]);
 
+  // Editing an existing listing: load it and pre-fill the form.
+  useEffect(() => {
+    if (!editId || !user) return;
+    let cancelled = false;
+    setLoadState('loading');
+    fetchListingById(editId)
+      .then((l) => {
+        if (cancelled) return;
+        if (!l || l.ownerId !== user.id) {
+          setLoadState('missing');
+          return;
+        }
+        setName(l.name);
+        setType(l.type);
+        setLocation(l.location);
+        setDescription(l.description);
+        setCapacity(l.capacity);
+        setPrice(l.price);
+        setAmenities(l.amenities);
+        setWeekdayStart(l.availableHours.weekdays.start);
+        setWeekdayEnd(l.availableHours.weekdays.end);
+        setWeekendStart(l.availableHours.weekends.start);
+        setWeekendEnd(l.availableHours.weekends.end);
+        setPhotos(l.images);
+        setLoadState('idle');
+      })
+      .catch(() => !cancelled && setLoadState('missing'));
+    return () => {
+      cancelled = true;
+    };
+  }, [editId, user]);
+
+  const canPublishNew = !!profile?.stripeChargesEnabled;
+
   const toggleAmenity = (a: string) =>
     setAmenities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
 
-  const togglePhoto = (url: string) =>
-    setPhotos((prev) => (prev.includes(url) ? prev.filter((x) => x !== url) : [...prev, url]));
-
   const canContinue = () => {
-    if (step === 0) return name.trim() && location.trim() && description.trim();
+    if (step === 0) {
+      return (
+        name.trim() &&
+        location.trim() &&
+        description.trim() &&
+        price > 0 &&
+        price < 10000 &&
+        capacity >= 1 &&
+        capacity <= 500
+      );
+    }
+    if (step === 2) return weekdayStart < weekdayEnd && weekendStart < weekendEnd;
+    if (step === 3) return photos.length > 0 && photos.length <= 10;
     return true;
   };
 
@@ -71,35 +117,41 @@ export default function ListYourSpace() {
   const handlePublish = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (photos.length === 0) {
+      setPublishError('Add at least one photo before publishing.');
+      return;
+    }
+    if (!editId && !canPublishNew) {
+      setPublishError('Set up payouts on your dashboard before publishing.');
+      return;
+    }
     setPublishing(true);
     setPublishError('');
+    const input: ListingInput = {
+      name: name.trim(),
+      location: location.trim(),
+      type,
+      description: description.trim(),
+      capacity,
+      price,
+      amenities,
+      availableHours: {
+        weekdays: { start: weekdayStart, end: weekdayEnd },
+        weekends: { start: weekendStart, end: weekendEnd },
+      },
+      images: photos,
+    };
     try {
-      await createListing({
-        name,
-        location,
-        type,
-        description,
-        capacity,
-        price,
-        amenities,
-        availableHours: {
-          weekdays: { start: weekdayStart, end: weekdayEnd },
-          weekends: { start: weekendStart, end: weekendEnd },
-        },
-        images: photos,
-        ownerId: user.id,
-        host: {
-          name: displayName ?? 'Space owner',
-          businessName: businessName ?? displayName ?? 'Space owner',
-          avatar: DEFAULT_HOST_AVATAR,
-          responseTime: 'within a few hours',
-          joined: String(new Date().getFullYear()),
-        },
-      });
+      if (editId) await updateListing(editId, input);
+      else await createListing(input, user.id);
       setSuccess(true);
     } catch (err) {
       console.error('Failed to publish listing', err);
-      setPublishError('Something went wrong publishing your space. Please try again.');
+      setPublishError(
+        editId
+          ? 'Something went wrong saving your changes. Please try again.'
+          : 'Something went wrong publishing your space. Please check your payouts are set up and try again.',
+      );
     } finally {
       setPublishing(false);
     }
@@ -123,12 +175,47 @@ export default function ListYourSpace() {
     );
   }
 
+  if (loadState !== 'idle') {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        {loadState === 'loading' ? (
+          <p className="text-sm text-ink-400">Loading your listing…</p>
+        ) : (
+          <>
+            <h1 className="font-display text-2xl font-bold text-ink-950">Listing not found</h1>
+            <p className="mt-2 text-ink-500">You can only edit spaces you own.</p>
+            <Button className="mt-6" onClick={() => navigate('/dashboard')}>
+              Back to dashboard
+            </Button>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
       <h1 className="font-display text-3xl font-bold text-ink-950 text-balance">
-        Turn your unused space into income
+        {editId ? `Edit ${name || 'your space'}` : 'Turn your unused space into income'}
       </h1>
-      <p className="mt-2 text-ink-500">List in minutes. Set your own hours and price.</p>
+      <p className="mt-2 text-ink-500">
+        {editId
+          ? 'Changes apply to new bookings. Existing bookings keep the price and times they were booked at.'
+          : 'List in minutes. Set your own hours and price.'}
+      </p>
+
+      {!editId && !canPublishNew && (
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-glow/40 bg-amber-glow/10 p-4 text-sm text-ink-700">
+          <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-glow" />
+          <p>
+            You can fill this in now, but you'll need to{' '}
+            <Link to="/dashboard" className="font-semibold text-brand-600 underline">
+              set up payouts
+            </Link>{' '}
+            before you can publish, so renters' payments can reach your bank account.
+          </p>
+        </div>
+      )}
 
       {/* Stepper */}
       <div className="mt-8 flex items-center gap-2">
@@ -160,7 +247,14 @@ export default function ListYourSpace() {
       <form onSubmit={handlePublish} className="mt-10 rounded-2xl border border-ink-100 bg-white p-6 sm:p-8">
         {step === 0 && (
           <div className="space-y-5">
-            <Input label="Space name" placeholder="e.g. Modern Meeting Room" value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input
+              label="Space name"
+              placeholder="e.g. Modern Meeting Room"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={120}
+              required
+            />
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-ink-700">Space type</label>
@@ -180,7 +274,14 @@ export default function ListYourSpace() {
               </div>
             </div>
 
-            <Input label="Location" placeholder="e.g. Sydney CBD" value={location} onChange={(e) => setLocation(e.target.value)} required />
+            <Input
+              label="Location"
+              placeholder="e.g. Sydney CBD"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              maxLength={120}
+              required
+            />
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-ink-700">Description</label>
@@ -188,6 +289,7 @@ export default function ListYourSpace() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
+                maxLength={4000}
                 placeholder="Describe your space, what it's great for, and what makes it special..."
                 className="w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 required
@@ -199,15 +301,17 @@ export default function ListYourSpace() {
                 label="Capacity"
                 type="number"
                 min={1}
+                max={500}
                 value={capacity}
-                onChange={(e) => setCapacity(Number(e.target.value))}
+                onChange={(e) => setCapacity(Math.min(500, Math.max(1, Number(e.target.value))))}
               />
               <Input
-                label="Price per hour ($)"
+                label="Price per hour (AUD)"
                 type="number"
                 min={5}
+                max={9999}
                 value={price}
-                onChange={(e) => setPrice(Number(e.target.value))}
+                onChange={(e) => setPrice(Math.min(9999, Math.max(0, Number(e.target.value))))}
               />
             </div>
           </div>
@@ -241,7 +345,13 @@ export default function ListYourSpace() {
         {step === 2 && (
           <div>
             <h2 className="font-display text-lg font-bold text-ink-950">Availability</h2>
-            <p className="mt-1 text-sm text-ink-500">Choose the hours your space is free to rent.</p>
+            <p className="mt-1 text-sm text-ink-500">
+              Choose the hours your space is free to rent (Sydney time). Renters can book in half-hour steps within
+              these hours.
+            </p>
+            {!(weekdayStart < weekdayEnd && weekendStart < weekendEnd) && (
+              <p className="mt-2 text-sm font-medium text-red-600">Each end time must be after its start time.</p>
+            )}
 
             <div className="mt-5 space-y-5">
               <div>
@@ -265,32 +375,10 @@ export default function ListYourSpace() {
         {step === 3 && (
           <div>
             <h2 className="font-display text-lg font-bold text-ink-950">Add photos</h2>
-            <p className="mt-1 text-sm text-ink-500">Pick a few photos that show off your space.</p>
-            <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {PHOTO_OPTIONS.map((url) => (
-                <button
-                  type="button"
-                  key={url}
-                  onClick={() => togglePhoto(url)}
-                  className={`relative aspect-square overflow-hidden rounded-xl border-2 transition-colors ${
-                    photos.includes(url) ? 'border-brand-600' : 'border-transparent'
-                  }`}
-                >
-                  <img src={url} alt="Space option" className="h-full w-full object-cover" />
-                  {photos.includes(url) && (
-                    <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-white">
-                      <Check size={12} />
-                    </span>
-                  )}
-                </button>
-              ))}
-              <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-ink-200 text-ink-400 hover:border-ink-400 hover:text-ink-600">
-                <Camera size={20} />
-                <span className="text-xs font-medium">Upload</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={() => {}} />
-              </label>
+            <p className="mt-1 text-sm text-ink-500">Upload a few photos that show off your space.</p>
+            <div className="mt-5">
+              {user && <PhotoUploader ownerId={user.id} value={photos} onChange={setPhotos} />}
             </div>
-            <p className="mt-3 text-xs text-ink-400">{photos.length} photo{photos.length === 1 ? '' : 's'} selected</p>
           </div>
         )}
 
@@ -320,8 +408,8 @@ export default function ListYourSpace() {
               Continue
             </Button>
           ) : (
-            <Button type="submit" disabled={publishing}>
-              {publishing ? 'Publishing…' : 'Publish your space'}
+            <Button type="submit" disabled={publishing || (!editId && !canPublishNew)}>
+              {publishing ? 'Saving…' : editId ? 'Save changes' : 'Publish your space'}
             </Button>
           )}
         </div>
@@ -333,9 +421,13 @@ export default function ListYourSpace() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
             <PartyPopper size={30} className="text-brand-600" />
           </div>
-          <h2 className="mt-5 font-display text-xl font-bold text-ink-950">Your space is live!</h2>
+          <h2 className="mt-5 font-display text-xl font-bold text-ink-950">
+            {editId ? 'Changes saved' : 'Your space is live!'}
+          </h2>
           <p className="mt-2 text-sm text-ink-500">
-            You can now earn from hours that would otherwise remain unused.
+            {editId
+              ? 'Your listing has been updated.'
+              : 'You can now earn from hours that would otherwise remain unused.'}
           </p>
           <div className="mt-6 flex flex-col gap-2">
             <Button fullWidth onClick={() => navigate('/dashboard')}>

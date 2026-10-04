@@ -2,7 +2,16 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import type { Listing } from '../types';
-import { formatCurrency, hoursBetween, priceBreakdown } from '../lib/utils';
+import {
+  checkBookingTime,
+  FREE_CANCELLATION_HOURS,
+  formatCurrency,
+  hoursBetween,
+  isWithinAvailableHours,
+  priceBreakdown,
+  TIME_SLOTS,
+  todayInSydney,
+} from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import Button from './Button';
 
@@ -10,19 +19,10 @@ interface BookingCardProps {
   listing: Listing;
 }
 
-const TIME_OPTIONS = Array.from({ length: 32 }, (_, i) => {
-  const totalMinutes = 6 * 60 + i * 30;
-  const h = Math.floor(totalMinutes / 60) % 24;
-  const m = totalMinutes % 60;
-  const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const displayH = h % 12 === 0 ? 12 : h % 12;
-  return { value, label: `${displayH}:${String(m).padStart(2, '0')} ${period}` };
-});
-
 export default function BookingCard({ listing }: BookingCardProps) {
   const navigate = useNavigate();
-  const { searchParams, setBookingDraft, isLoggedIn, openLoginModal } = useApp();
+  const { searchParams, setBookingDraft, isLoggedIn, openLoginModal, user } = useApp();
+  const isOwnSpace = !!user && listing.ownerId === user.id;
   const [date, setDate] = useState(searchParams.date);
   const [startTime, setStartTime] = useState(searchParams.startTime);
   const [endTime, setEndTime] = useState(searchParams.endTime);
@@ -36,8 +36,13 @@ export default function BookingCard({ listing }: BookingCardProps) {
   );
 
   const handleReserve = () => {
-    if (hours <= 0) {
-      setError('End time must be after start time.');
+    const check = checkBookingTime({ date, startTime, endTime });
+    if (!check.ok) {
+      setError(check.error);
+      return;
+    }
+    if (!isWithinAvailableHours(listing.availableHours, date, startTime, endTime)) {
+      setError("Those hours are outside this space's available hours (see below).");
       return;
     }
     setError('');
@@ -53,9 +58,15 @@ export default function BookingCard({ listing }: BookingCardProps) {
           ${listing.price} <span className="text-sm font-normal text-ink-500">/ hour</span>
         </p>
         <span className="flex items-center gap-1 text-sm font-medium text-ink-800">
-          <Star size={13} className="fill-amber-glow text-amber-glow" />
-          {listing.rating}
-          <span className="text-ink-400">({listing.reviewCount})</span>
+          {listing.rating == null ? (
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">New</span>
+          ) : (
+            <>
+              <Star size={13} className="fill-amber-glow text-amber-glow" />
+              {listing.rating}
+              <span className="text-ink-400">({listing.reviewCount})</span>
+            </>
+          )}
         </span>
       </div>
 
@@ -65,6 +76,8 @@ export default function BookingCard({ listing }: BookingCardProps) {
             Date
           </label>
           <input
+            type="date"
+            min={todayInSydney()}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm font-medium text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
@@ -80,7 +93,7 @@ export default function BookingCard({ listing }: BookingCardProps) {
               onChange={(e) => setStartTime(e.target.value)}
               className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm font-medium text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
             >
-              {TIME_OPTIONS.map((t) => (
+              {TIME_SLOTS.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
@@ -96,7 +109,7 @@ export default function BookingCard({ listing }: BookingCardProps) {
               onChange={(e) => setEndTime(e.target.value)}
               className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm font-medium text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
             >
-              {TIME_OPTIONS.map((t) => (
+              {TIME_SLOTS.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
@@ -139,10 +152,19 @@ export default function BookingCard({ listing }: BookingCardProps) {
         </div>
       </div>
 
-      <Button fullWidth size="lg" className="mt-5" onClick={handleReserve}>
-        Reserve
-      </Button>
-      <p className="mt-3 text-center text-xs text-ink-400">You won't be charged yet</p>
+      {isOwnSpace ? (
+        <p className="mt-5 rounded-xl bg-ink-50 p-3 text-center text-sm text-ink-500">This is your space.</p>
+      ) : (
+        <>
+          <Button fullWidth size="lg" className="mt-5" onClick={handleReserve}>
+            Reserve
+          </Button>
+          <p className="mt-3 text-center text-xs text-ink-400">
+            You won't be charged yet · Free cancellation up to {FREE_CANCELLATION_HOURS} hours before
+          </p>
+          <p className="mt-1 text-center text-xs text-ink-400">Prices in AUD · times are Sydney time</p>
+        </>
+      )}
     </div>
   );
 }
